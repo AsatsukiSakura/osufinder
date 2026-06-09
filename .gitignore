@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+code_frontend_new.txt
+code_backend.txt
+list.txt
+merge.ps1
+convert_legacy.cjs
