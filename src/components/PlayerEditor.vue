@@ -36,6 +36,27 @@
       <p v-if="isEdit" class="hint muted">创建后不可修改</p>
     </div>
 
+    <!-- 反向搜索：通过用户名查 UID -->
+    <div v-if="!isEdit" class="field-group">
+      <label class="field-label">通过 osu! 用户名反查 UID</label>
+      <div class="uid-row">
+        <input
+          v-model="usernameSearch"
+          class="input uid-input"
+          placeholder="输入 osu! 用户名，如 peppy"
+          @keydown.enter="searchByUsername"
+        />
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="searchingUsername || !usernameSearch.trim()"
+          @click="searchByUsername"
+        >
+          {{ searchingUsername ? '搜索中...' : '搜索' }}
+        </button>
+      </div>
+    </div>
+
     <!-- 个人称呼 -->
     <div class="field-group">
       <label class="field-label">个人称呼 <span class="hint muted">(点击标签设为主显示名)</span></label>
@@ -100,7 +121,7 @@ import { reactive, ref } from 'vue'
 import { playersRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
 import { useEntityCrud } from '../composables/useEntityCrud'
-import { fetchOsuUser } from '../api/osu'
+import { fetchOsuUser, fetchOsuUserByName } from '../api/osu'
 import EditorShell from './EditorShell.vue'
 import TagField from './TagField.vue'
 import LevelPicker from './LevelPicker.vue'
@@ -180,6 +201,34 @@ async function fetchOsuPlayer() {
     showToast(err.message || '获取失败', 'error')
   } finally {
     fetchingOsu.value = false
+  }
+}
+
+// ---- 反向搜索：用户名 → UID ----
+const usernameSearch = ref('')
+const searchingUsername = ref(false)
+
+async function searchByUsername() {
+  const name = usernameSearch.value.trim()
+  if (!name) return
+  searchingUsername.value = true
+  try {
+    const user = await fetchOsuUserByName(name)
+    if (!user) {
+      showToast(`未找到 osu! 玩家: ${name}`, 'error')
+      return
+    }
+    // 自动填入 UID
+    form.osuUidInput = String(user.id)
+    // 如果还没有昵称，自动填入用户名
+    if (form.nicknames.length === 0 && user.username) {
+      form.nicknames.push(user.username)
+    }
+    showToast(`已找到 osu! 玩家: ${user.username} (UID: ${user.id})`, 'success')
+  } catch (err) {
+    showToast(err.message || '搜索失败', 'error')
+  } finally {
+    searchingUsername.value = false
   }
 }
 

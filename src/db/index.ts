@@ -1,6 +1,19 @@
 import Dexie from 'dexie'
+import type { Table } from 'dexie'
+import type {
+  Player, PlayerContacts, PlayerRecord, PlayerExport,
+  Tournament, Team, TournamentExport,
+  ExportData, Level
+} from '../types'
 
-export const db = new Dexie('osufinder_v3')
+interface PlayerTable extends Omit<Player, 'osuUid'> {
+  osuUid: number
+}
+
+export const db = new Dexie('osufinder_v3') as Dexie & {
+  players: Table<PlayerTable, number>
+  tournaments: Table<Tournament, number>
+}
 
 db.version(1).stores({})
 
@@ -9,7 +22,7 @@ db.version(7).stores({
   tournaments: '++id'
 })
 
-const emptyContacts = () => ({
+const emptyContacts = (): PlayerContacts => ({
   qq: [],
   bili: [],
   discord: [],
@@ -17,13 +30,16 @@ const emptyContacts = () => ({
 })
 
 // 通用全表扫描：读取全部记录 → 可选过滤 → 按 updatedAt 降序排列
-async function scanTable(table, filterFn) {
+async function scanTable<T extends { updatedAt?: number }>(
+  table: Table<T>,
+  filterFn?: (item: T) => boolean
+): Promise<T[]> {
   const all = await table.toArray()
   const filtered = filterFn ? all.filter(filterFn) : all
   return filtered.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
 }
 
-function matchPlayer(p, kw) {
+function matchPlayer(p: PlayerTable, kw: string): boolean {
   if (String(p.osuUid || '').includes(kw)) return true
   if ((p.nicknames || []).some((n) => n.toLowerCase().includes(kw))) return true
 
@@ -36,7 +52,7 @@ function matchPlayer(p, kw) {
   return false
 }
 
-function matchTournament(t, kw) {
+function matchTournament(t: Tournament, kw: string): boolean {
   if ((t.name || '').toLowerCase().includes(kw)) return true
   if ((t.edition || '').toLowerCase().includes(kw)) return true
 
@@ -48,11 +64,11 @@ function matchTournament(t, kw) {
 }
 
 export const playersRepo = {
-  getAll() {
+  getAll(): Promise<PlayerTable[]> {
     return scanTable(db.players)
   },
 
-  async search(keyword) {
+  async search(keyword: string): Promise<PlayerTable[]> {
     const kw = keyword.trim().toLowerCase()
     if (!kw) return this.getAll()
 
@@ -69,7 +85,7 @@ export const playersRepo = {
     return scanTable(db.players, (p) => matchPlayer(p, kw))
   },
 
-  async searchPaginated(keyword, page = 1, pageSize = 20) {
+  async searchPaginated(keyword: string, page = 1, pageSize = 20) {
     const all = await this.search(keyword)
     const total = all.length
     const start = (page - 1) * pageSize
@@ -77,11 +93,11 @@ export const playersRepo = {
     return { items, total }
   },
 
-  async getByOsuUid(osuUid) {
+  async getByOsuUid(osuUid: number) {
     return await db.players.get(osuUid)
   },
 
-  async create(data) {
+  async create(data: { osuUid: number; nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[] }) {
     const now = Date.now()
     return await db.players.add({
       osuUid: data.osuUid,
@@ -94,7 +110,7 @@ export const playersRepo = {
     })
   },
 
-  async update(osuUid, data) {
+  async update(osuUid: number, data: { nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[] }) {
     return await db.players.update(osuUid, {
       nicknames: data.nicknames || [],
       primaryNickIndex: data.primaryNickIndex ?? 0,
@@ -104,7 +120,7 @@ export const playersRepo = {
     })
   },
 
-  async remove(osuUid) {
+  async remove(osuUid: number) {
     return await db.players.delete(osuUid)
   },
 
@@ -121,11 +137,15 @@ export const playersRepo = {
     return { playerCount: all.length, recordCount }
   },
 
-  async exportData(mode = 'all') {
+  async exportData(mode = 'all'): Promise<ExportData> {
     const all = await this.getAll()
-    const levelMap = { green: ['green'], yellow_and_below: ['green', 'yellow'], all: ['green', 'yellow', 'red'] }
+    const levelMap: Record<string, Level[]> = {
+      green: ['green'],
+      yellow_and_below: ['green', 'yellow'],
+      all: ['green', 'yellow', 'red']
+    }
     const allowedLevels = levelMap[mode] || ['green', 'yellow', 'red']
-    const players = all.map(p => ({
+    const players: PlayerExport[] = all.map(p => ({
       osuUid: p.osuUid,
       nicknames: p.nicknames || [],
       primaryNickIndex: p.primaryNickIndex ?? 0,
@@ -144,7 +164,7 @@ export const playersRepo = {
     }
   },
 
-  async importData(data) {
+  async importData(data: ExportData) {
     if (!data || !data.players || !Array.isArray(data.players)) {
       throw new Error('文件格式不正确')
     }
@@ -175,7 +195,7 @@ export const playersRepo = {
         const mergedNicknames = Array.from(new Set([...(existing.nicknames || []), ...(incoming.nicknames || [])]))
         const existingContacts = existing.contacts || emptyContacts()
         const incomingContacts = incoming.contacts || emptyContacts()
-        const mergedContacts = {
+        const mergedContacts: PlayerContacts = {
           qq: Array.from(new Set([...existingContacts.qq, ...incomingContacts.qq])),
           bili: Array.from(new Set([...existingContacts.bili, ...incomingContacts.bili])),
           discord: Array.from(new Set([...existingContacts.discord, ...incomingContacts.discord])),
@@ -205,30 +225,30 @@ export const playersRepo = {
 }
 
 export const tournamentRepo = {
-  getAll() {
+  getAll(): Promise<Tournament[]> {
     return scanTable(db.tournaments)
   },
 
-  search(keyword) {
+  search(keyword: string): Promise<Tournament[]> {
     const kw = keyword.trim().toLowerCase()
     if (!kw) return this.getAll()
-    if (kw.length < 2) return []
+    if (kw.length < 2) return Promise.resolve([])
     return scanTable(db.tournaments, (t) => matchTournament(t, kw))
   },
 
-  getById(id) {
+  getById(id: number) {
     return db.tournaments.get(id)
   },
 
-  findByPlayerOsuUid(osuUid) {
+  findByPlayerOsuUid(osuUid: number | string): Promise<Tournament[]> {
     const uid = Number(osuUid)
-    if (!uid) return []
+    if (!uid) return Promise.resolve([])
     return scanTable(db.tournaments, (t) =>
       (t.teams || []).some((team) => (team.members || []).includes(uid))
     )
   },
 
-  async create(data) {
+  async create(data: { name: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
     const now = Date.now()
     return await db.tournaments.add({
       name: data.name,
@@ -242,7 +262,7 @@ export const tournamentRepo = {
     })
   },
 
-  async update(id, data) {
+  async update(id: number, data: { name: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
     return await db.tournaments.update(id, {
       name: data.name,
       edition: data.edition || '',
@@ -254,7 +274,7 @@ export const tournamentRepo = {
     })
   },
 
-  async remove(id) {
+  async remove(id: number) {
     return await db.tournaments.delete(id)
   },
 
@@ -262,9 +282,9 @@ export const tournamentRepo = {
     return await db.tournaments.count()
   },
 
-  async exportData() {
+  async exportData(): Promise<ExportData> {
     const all = await this.getAll()
-    const tournaments = all.map(t => ({
+    const tournaments: TournamentExport[] = all.map(t => ({
       name: t.name,
       edition: t.edition || '',
       ts: t.ts || 0,
@@ -283,14 +303,14 @@ export const tournamentRepo = {
     }
   },
 
-  async importData(data) {
+  async importData(data: ExportData) {
     if (!data || !data.tournaments || !Array.isArray(data.tournaments)) {
       throw new Error('文件格式不正确')
     }
     let added = 0
     let merged = 0
     const now = Date.now()
-    for (const incoming of data.tournaments) {
+    for (const incoming of data.tournaments!) {
       if (!incoming.name) continue
       const existing = await db.tournaments
         .where('name').equals(incoming.name)
@@ -309,7 +329,7 @@ export const tournamentRepo = {
         })
         added++
       } else {
-        await db.tournaments.update(existing.id, {
+        await db.tournaments.update(existing.id!, {
           name: incoming.name,
           edition: incoming.edition || '',
           ts: incoming.ts || 0,
@@ -335,4 +355,4 @@ export const tournamentRepo = {
       teamCount
     }
   }
-} 
+}
