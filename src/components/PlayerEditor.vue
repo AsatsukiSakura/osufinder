@@ -15,13 +15,24 @@
     <!-- osu UID -->
     <div class="field-group">
       <label class="field-label">osu UID <span class="required">*</span></label>
-      <input
-        :value="form.osuUidInput"
-        @input="onOsuUidInput"
-        class="input"
-        placeholder="请输入 osu 用户 ID"
-        :disabled="isEdit"
-      />
+      <div class="uid-row">
+        <input
+          :value="form.osuUidInput"
+          @input="onOsuUidInput"
+          class="input uid-input"
+          placeholder="请输入 osu 用户 ID"
+          :disabled="isEdit"
+        />
+        <button
+          v-if="!isEdit"
+          type="button"
+          class="btn btn-secondary btn-sm"
+          :disabled="fetchingOsu || !form.osuUidInput"
+          @click="fetchOsuPlayer"
+        >
+          {{ fetchingOsu ? '获取中...' : '从 osu! 获取' }}
+        </button>
+      </div>
       <p v-if="isEdit" class="hint muted">创建后不可修改</p>
     </div>
 
@@ -89,6 +100,7 @@ import { reactive, ref } from 'vue'
 import { playersRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
 import { useEntityCrud } from '../composables/useEntityCrud'
+import { fetchOsuUser } from '../api/osu'
 import EditorShell from './EditorShell.vue'
 import TagField from './TagField.vue'
 import LevelPicker from './LevelPicker.vue'
@@ -141,10 +153,34 @@ function togglePrimary(idx) {
 }
 
 // ---- UID ----
+const fetchingOsu = ref(false)
+
 function onOsuUidInput(e) {
   const filtered = e.target.value.replace(/\D/g, '')
   form.osuUidInput = filtered
   e.target.value = filtered
+}
+
+async function fetchOsuPlayer() {
+  const uid = Number(form.osuUidInput)
+  if (!uid || uid < 1) return
+  fetchingOsu.value = true
+  try {
+    const user = await fetchOsuUser(uid)
+    if (!user) {
+      showToast('未找到该 UID 对应的 osu! 玩家', 'error')
+      return
+    }
+    // 如果还没有昵称，自动填入 osu! 用户名
+    if (form.nicknames.length === 0 && user.username) {
+      form.nicknames.push(user.username)
+    }
+    showToast(`已获取 osu! 玩家: ${user.username}`, 'success')
+  } catch (err) {
+    showToast(err.message || '获取失败', 'error')
+  } finally {
+    fetchingOsu.value = false
+  }
 }
 
 // ---- 记录 ----

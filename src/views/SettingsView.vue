@@ -41,6 +41,33 @@
 
       <section class="setting-card">
         <div class="setting-header">
+          <h3>osu! API</h3>
+          <p class="muted">配置 API 凭证后可从 osu! 获取玩家基本信息</p>
+        </div>
+
+        <div class="api-config">
+          <div class="field-group">
+            <label class="field-label">Client ID</label>
+            <input v-model="apiClientId" class="input" placeholder="输入 osu! OAuth Client ID" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Client Secret</label>
+            <input v-model="apiClientSecret" type="password" class="input" placeholder="输入 osu! OAuth Client Secret" />
+          </div>
+          <div class="api-actions">
+            <button type="button" class="btn btn-primary" @click="saveApiConfig" :disabled="apiSaving">
+              {{ apiSaving ? '验证中...' : '保存并验证' }}
+            </button>
+            <button v-if="hasApiConfig" type="button" class="btn btn-secondary" @click="clearApiConfig">清除凭证</button>
+          </div>
+          <p class="muted" style="margin-top: 8px; font-size: var(--font-size-xs);">
+            在 <a href="https://osu.ppy.sh/home/account/edit#oauth" target="_blank" rel="noopener">osu! 账号设置 → OAuth</a> 创建新的 OAuth 应用获取凭证
+          </p>
+        </div>
+      </section>
+
+      <section class="setting-card">
+        <div class="setting-header">
           <h3>数据管理</h3>
           <p class="muted">管理本地存储的数据</p>
         </div>
@@ -170,11 +197,60 @@
 import { onMounted, ref } from 'vue'
 import { playersRepo, tournamentRepo } from '../db'
 import { useToast } from '../composables/useToast'
+import { getApiConfig, setApiConfig, removeApiConfig } from '../api/storage'
+import { verifyCredentials } from '../api/osu'
 import { version } from '../../package.json'
 
 const stats = ref({ playerCount: 0, recordCount: 0, tournamentCount: 0, teamCount: 0, storageBytes: 0 })
 const currentTheme = ref('light')
 const { toast, showToast } = useToast()
+
+// osu! API 凭证
+const apiClientId = ref('')
+const apiClientSecret = ref('')
+const apiSaving = ref(false)
+const hasApiConfig = ref(false)
+
+function loadApiConfig() {
+  const config = getApiConfig()
+  if (config) {
+    apiClientId.value = config.clientId || ''
+    apiClientSecret.value = config.clientSecret || ''
+    hasApiConfig.value = true
+  }
+}
+
+async function saveApiConfig() {
+  const id = apiClientId.value.trim()
+  const secret = apiClientSecret.value.trim()
+  if (!id || !secret) {
+    showToast('请填写 Client ID 和 Client Secret', 'error')
+    return
+  }
+  apiSaving.value = true
+  try {
+    const ok = await verifyCredentials(id, secret)
+    if (!ok) {
+      showToast('凭证验证失败，请检查是否正确', 'error')
+      return
+    }
+    setApiConfig({ clientId: id, clientSecret: secret })
+    hasApiConfig.value = true
+    showToast('API 凭证保存成功', 'success')
+  } catch {
+    showToast('验证请求失败，请检查网络', 'error')
+  } finally {
+    apiSaving.value = false
+  }
+}
+
+function clearApiConfig() {
+  removeApiConfig()
+  apiClientId.value = ''
+  apiClientSecret.value = ''
+  hasApiConfig.value = false
+  showToast('API 凭证已清除', 'success')
+}
 
 const deps = {
   vue: '3.5.34',
@@ -187,6 +263,7 @@ onMounted(async () => {
   currentTheme.value =
     document.documentElement.getAttribute('data-theme') ||
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  loadApiConfig()
   await refreshStats()
 })
 
@@ -474,5 +551,44 @@ function formatBytes(bytes) {
 .import-hint {
   margin: 0;
   font-size: var(--font-size-xs);
+}
+
+/* API 配置 */
+.api-config {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.api-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.api-config .input {
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-item);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+}
+
+.api-config .input:focus {
+  outline: none;
+  border-color: var(--border-focus);
 }
 </style>

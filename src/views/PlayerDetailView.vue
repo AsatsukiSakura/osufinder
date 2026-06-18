@@ -10,6 +10,9 @@
       <div class="detail-header">
         <router-link to="/players/search" class="link-back">← 返回列表</router-link>
         <div class="detail-actions">
+          <button v-if="!isEditing" class="btn btn-secondary btn-sm" @click="refreshOsuData" :disabled="refreshingOsu">
+            {{ refreshingOsu ? '刷新中...' : '🔄 osu!' }}
+          </button>
           <button v-if="!isEditing" class="btn btn-primary btn-sm" @click="startEdit">✏️ 编辑</button>
           <button v-if="isEditing" class="btn btn-secondary btn-sm" @click="cancelEdit">取消</button>
         </div>
@@ -118,6 +121,7 @@ import { playersRepo, tournamentRepo } from '../db'
 import PlayerEditor from '../components/PlayerEditor.vue'
 import { getLevelLabel } from '../utils/level'
 import { hasAnyContact } from '../utils/player'
+import { fetchOsuUser } from '../api/osu'
 
 const route = useRoute()
 const router = useRouter()
@@ -127,6 +131,7 @@ const loading = ref(true)
 const isEditing = ref(false)
 const avatarFailed = ref(false)
 const tournaments = ref([])
+const refreshingOsu = ref(false)
 
 const avatarUrl = computed(() => {
   if (!player.value?.osuUid) return ''
@@ -162,6 +167,35 @@ function rankBadgeClass(rank) {
 
 function startEdit() { isEditing.value = true }
 function cancelEdit() { isEditing.value = false }
+
+async function refreshOsuData() {
+  if (!player.value?.osuUid) return
+  refreshingOsu.value = true
+  try {
+    const user = await fetchOsuUser(player.value.osuUid)
+    if (!user || !user.username) {
+      alert('未能在 osu! 找到该玩家')
+      return
+    }
+    // 如果 osu! 用户名不在当前昵称列表中，则添加
+    const nicks = player.value.nicknames || []
+    if (!nicks.some(n => n.toLowerCase() === user.username.toLowerCase())) {
+      nicks.push(user.username)
+      await playersRepo.update(player.value.osuUid, {
+        ...player.value,
+        nicknames: nicks
+      })
+      player.value = { ...player.value, nicknames: [...nicks] }
+      alert(`已添加 osu! 用户名: ${user.username}`)
+    } else {
+      alert(`osu! 用户名 "${user.username}" 已在称呼列表中`)
+    }
+  } catch (err) {
+    alert('刷新失败: ' + (err.message || '请检查 API 凭证配置'))
+  } finally {
+    refreshingOsu.value = false
+  }
+}
 
 function onSaved() {
   isEditing.value = false

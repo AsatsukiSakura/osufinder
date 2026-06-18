@@ -100,6 +100,16 @@
   gap: 8px;
 }
 
+.uid-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.uid-input {
+  flex: 1;
+}
+
 .field-label {
   font-size: var(--font-size-sm);
   font-weight: 600;
