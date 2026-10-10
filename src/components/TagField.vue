@@ -20,17 +20,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const props = defineProps({
-  modelValue: { type: Array, default: () => [] },
-  label: { type: String, required: true },
-  placeholder: { type: String, default: '回车添加多个' },
-  hint: { type: String, default: '' }
+const props = withDefaults(defineProps<{
+  modelValue?: string[]
+  label: string
+  placeholder?: string
+  hint?: string
+}>(), {
+  modelValue: () => [],
+  placeholder: '回车添加多个',
+  hint: ''
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: string[]): void
+}>()
 
 const inputText = ref('')
 const items = computed(() => props.modelValue)
@@ -51,7 +57,7 @@ function add() {
   inputText.value = ''
 }
 
-function remove(index) {
+function remove(index: number) {
   const current = items.value
   const arr = [...current]
   arr.splice(index, 1)

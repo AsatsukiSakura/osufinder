@@ -17,8 +17,8 @@
           class="nav-item"
           active-class="nav-item--active"
         >
-          <span class="nav-icon">{{ route.meta.icon }}</span>
-          <span class="nav-label">{{ route.meta.title }}</span>
+          <span class="nav-icon">{{ route.meta?.icon }}</span>
+          <span class="nav-label">{{ route.meta?.title }}</span>
         </router-link>
       </nav>
 
@@ -38,12 +38,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const route = useRoute()
 const isDark = ref(false)
 
 const menuRoutes = computed(() => {
@@ -56,7 +55,7 @@ const menuRoutes = computed(() => {
     }))
 })
 
-function applyTheme(theme) {
+function applyTheme(theme: string) {
   document.documentElement.setAttribute('data-theme', theme)
   isDark.value = theme === 'dark'
   localStorage.setItem('app-theme', theme)

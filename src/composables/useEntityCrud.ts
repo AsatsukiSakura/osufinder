@@ -2,14 +2,14 @@ import type { Ref } from 'vue'
 
 export interface CrudRepo {
   create(data: Record<string, unknown>): Promise<unknown>
-  update(id: number | string, data: Record<string, unknown>): Promise<void>
+  update(id: number | string, data: Record<string, unknown>): Promise<unknown>
   remove(id: number | string): Promise<void>
 }
 
 export interface CrudContext {
   isEdit: Ref<boolean>
   showToast: (text: string, type: 'success' | 'error') => void
-  emit: (event: string, ...args: unknown[]) => void
+  emit(event: string, ...args: unknown[]): void
   label: string
   refreshLastUpdated?: (entity?: { updatedAt?: number } | null) => void
 }
@@ -57,7 +57,7 @@ export function useEntityCrud(repo: CrudRepo, { isEdit, showToast, emit, label, 
     }
   }
 
-  async function remove(id: number | string) {
+  async function remove(id: number | string | null | undefined) {
     if (!id || !isEdit.value) return
     if (!confirm(`确定要删除${label}吗？`)) return
     try {

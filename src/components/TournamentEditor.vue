@@ -111,7 +111,7 @@
   </EditorShell>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, onMounted, onBeforeUnmount } from 'vue'
 import { tournamentRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
@@ -120,9 +120,20 @@ import { usePlayerNames } from '../composables/usePlayerNames'
 import EditorShell from './EditorShell.vue'
 import TeamEditor from './TeamEditor.vue'
 import RankSetEditor from './RankSetEditor.vue'
+import type { Tournament, RankSetItem } from '../types'
 
-const props = defineProps({ tournament: { type: Object, default: null } })
-const emit = defineEmits(['saved', 'deleted'])
+interface FormTeam {
+  _id: string
+  name: string
+  members: number[]
+  rank: string
+}
+
+const props = defineProps<{ tournament?: Tournament | null }>()
+const emit = defineEmits<{
+  (e: 'saved'): void
+  (e: 'deleted'): void
+}>()
 
 const { isEdit, lastUpdated, refreshLastUpdated, toast, showToast } = useEditor(props.tournament)
 const { loadPlayerNames } = usePlayerNames()
@@ -132,7 +143,7 @@ const { save, remove } = useEntityCrud(tournamentRepo, {
 })
 
 // 名次集合 → 下拉选项
-function rankItemDisplay(item) {
+function rankItemDisplay(item: RankSetItem): string {
   return item.l === item.r ? `#${item.l}` : `#${item.l}~#${item.r}`
 }
 
@@ -151,7 +162,7 @@ const rankOptions = computed(() => {
   })
 })
 
-function rankClass(rank) {
+function rankClass(rank: string): string {
   if (rank === '#1') return 'rank-picker-btn--gold'
   if (rank === '#2') return 'rank-picker-btn--silver'
   if (rank === '#3') return 'rank-picker-btn--bronze'
@@ -159,12 +170,12 @@ function rankClass(rank) {
 }
 
 // 默认名次集合（单败：1, 2, 3~4, 5~8, 9~16）
-const DEFAULT_RANK_SET = [
+const DEFAULT_RANK_SET: RankSetItem[] = [
   { l: 1, r: 1 }, { l: 2, r: 2 }, { l: 3, r: 3 }, { l: 4, r: 4 }, { l: 5, r: 6 }
 ]
 
 // 历史数据兼容：匹配 rankSet 中的有效值
-function normalizeRank(raw, rankSet) {
+function normalizeRank(raw: string | undefined, rankSet: RankSetItem[]): string {
   if (!raw) return ''
   const sorted = [...rankSet].sort((a, b) => a.l - b.l)
   const match = sorted.find(opt => rankItemDisplay(opt) === raw)
@@ -174,7 +185,14 @@ function normalizeRank(raw, rankSet) {
 const initialRankSet = (props.tournament?.rankSet?.length ? props.tournament.rankSet : DEFAULT_RANK_SET).map(s => ({ ...s }))
 
 let teamIdCounter = Date.now()
-const form = reactive({
+const form = reactive<{
+  name: string
+  edition: string
+  ts: number
+  ms: number
+  rankSet: RankSetItem[]
+  teams: FormTeam[]
+}>({
   name: props.tournament?.name || '',
   edition: props.tournament?.edition || '',
   ts: props.tournament?.ts || 0,
@@ -183,7 +201,9 @@ const form = reactive({
   teams: (props.tournament?.teams || []).map(t => ({
     _id: 't' + (teamIdCounter++),
     name: t.name || '',
-    members: (t.members || []).map(m => typeof m === 'object' ? Number(m.osuUid) : Number(m)).filter(uid => uid > 0),
+    members: ((t.members || []) as (number | { osuUid: number })[]).map(m =>
+      typeof m === 'object' ? Number(m.osuUid) : Number(m)
+    ).filter(uid => uid > 0),
     rank: normalizeRank(t.rank, initialRankSet)
   }))
 })
@@ -192,19 +212,25 @@ const editingIndex = ref(-1)
 const showNewTeam = ref(false)
 const openRankPicker = ref(-1)
 
-function toggleRankPicker(i) {
+function toggleRankPicker(i: number) {
   openRankPicker.value = openRankPicker.value === i ? -1 : i
 }
 
-function setRank(i, value) {
+function setRank(i: number, value: string) {
   form.teams[i].rank = value
   openRankPicker.value = -1
 }
 
 function addTeam() { showNewTeam.value = true }
-function confirmNewTeam(data) { form.teams.push({ _id: 't' + (teamIdCounter++), rank: '', ...data }); showNewTeam.value = false }
-function updateTeam(i, data) { Object.assign(form.teams[i], data); editingIndex.value = -1 }
-function removeTeam(i) { form.teams.splice(i, 1) }
+function confirmNewTeam(data: { name: string; members: number[] }) {
+  form.teams.push({ _id: 't' + (teamIdCounter++), rank: '', ...data })
+  showNewTeam.value = false
+}
+function updateTeam(i: number, data: { name: string; members: number[] }) {
+  Object.assign(form.teams[i], data)
+  editingIndex.value = -1
+}
+function removeTeam(i: number) { form.teams.splice(i, 1) }
 
 function buildData() {
   return {
@@ -219,9 +245,9 @@ function buildData() {
 
 async function handleSave() {
   if (!form.name.trim()) return showToast('请填写赛事名称', 'error')
-    if (form.ts > 0 && form.ms > form.ts) return showToast('ms 不能 > ts', 'error')
+  if (form.ts > 0 && form.ms > form.ts) return showToast('ms 不能 > ts', 'error')
 
-    // 检查名次集合是否有效
+  // 检查名次集合是否有效
   const sorted = [...form.rankSet].sort((a, b) => a.l - b.l)
   for (let i = 1; i < sorted.length; i++) {
     if (sorted[i].l <= sorted[i - 1].r) {
@@ -232,8 +258,9 @@ async function handleSave() {
   await save({ buildData, id: props.tournament?.id })
 }
 
-function onDocClick(e) {
-  if (!e.target.closest('.rank-picker')) {
+function onDocClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  if (!target?.closest('.rank-picker')) {
     openRankPicker.value = -1
   }
 }

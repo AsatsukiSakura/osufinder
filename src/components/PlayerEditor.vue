@@ -116,7 +116,7 @@
   </EditorShell>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { playersRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
@@ -125,9 +125,13 @@ import { fetchOsuUser, fetchOsuUserByName } from '../api/osu'
 import EditorShell from './EditorShell.vue'
 import TagField from './TagField.vue'
 import LevelPicker from './LevelPicker.vue'
+import type { Player, PlayerContacts, PlayerRecord, Level } from '../types'
 
-const props = defineProps({ player: { type: Object, default: null } })
-const emit = defineEmits(['saved', 'deleted'])
+const props = defineProps<{ player?: Player | null }>()
+const emit = defineEmits<{
+  (e: 'saved'): void
+  (e: 'deleted'): void
+}>()
 
 const { isEdit, lastUpdated, toast, showToast } = useEditor(props.player)
 
@@ -136,7 +140,14 @@ const { save, remove } = useEntityCrud(playersRepo, {
 })
 
 // 表单数据
-const form = reactive({
+const form = reactive<{
+  osuUid: number | null
+  osuUidInput: string
+  nicknames: string[]
+  primaryNickIndex: number
+  contacts: PlayerContacts
+  records: PlayerRecord[]
+}>({
   osuUid: props.player?.osuUid ?? null,
   osuUidInput: props.player ? String(props.player.osuUid) : '',
   nicknames: [],
@@ -146,11 +157,16 @@ const form = reactive({
 })
 
 if (props.player) {
-  form.nicknames = [...(props.player.nicknames || [])]
-  form.primaryNickIndex = props.player.primaryNickIndex ?? 0
-  const c = props.player.contacts || {}
-  form.contacts = { qq: [...(c.qq || [])], bili: [...(c.bili || [])], discord: [...(c.discord || [])], twitter: [...(c.twitter || [])] }
-  form.records = (props.player?.records || []).map(r => ({ ...r }))
+  const player = props.player
+  form.nicknames = [...(player.nicknames || [])]
+  form.primaryNickIndex = player.primaryNickIndex ?? 0
+  form.contacts = {
+    qq: [...(player.contacts?.qq || [])],
+    bili: [...(player.contacts?.bili || [])],
+    discord: [...(player.contacts?.discord || [])],
+    twitter: [...(player.contacts?.twitter || [])]
+  }
+  form.records = (player.records || []).map(r => ({ ...r }))
 }
 
 // ---- 昵称 ----
@@ -161,7 +177,7 @@ function addNickname() {
   form.nicknames.push(val)
   nickInput.value = ''
 }
-function removeNickname(index) {
+function removeNickname(index: number) {
   form.nicknames.splice(index, 1)
   if (form.primaryNickIndex >= form.nicknames.length) {
     form.primaryNickIndex = Math.max(0, form.nicknames.length - 1)
@@ -169,17 +185,18 @@ function removeNickname(index) {
     form.primaryNickIndex--
   }
 }
-function togglePrimary(idx) {
+function togglePrimary(idx: number) {
   form.primaryNickIndex = form.primaryNickIndex === idx ? 0 : idx
 }
 
 // ---- UID ----
 const fetchingOsu = ref(false)
 
-function onOsuUidInput(e) {
-  const filtered = e.target.value.replace(/\D/g, '')
+function onOsuUidInput(e: Event) {
+  const el = e.target as HTMLInputElement
+  const filtered = el.value.replace(/\D/g, '')
   form.osuUidInput = filtered
-  e.target.value = filtered
+  el.value = filtered
 }
 
 async function fetchOsuPlayer() {
@@ -198,7 +215,7 @@ async function fetchOsuPlayer() {
     }
     showToast(`已获取 osu! 玩家: ${user.username}`, 'success')
   } catch (err) {
-    showToast(err.message || '获取失败', 'error')
+    showToast(err instanceof Error ? err.message : '获取失败', 'error')
   } finally {
     fetchingOsu.value = false
   }
@@ -226,7 +243,7 @@ async function searchByUsername() {
     }
     showToast(`已找到 osu! 玩家: ${user.username} (UID: ${user.id})`, 'success')
   } catch (err) {
-    showToast(err.message || '搜索失败', 'error')
+    showToast(err instanceof Error ? err.message : '搜索失败', 'error')
   } finally {
     searchingUsername.value = false
   }
@@ -235,7 +252,7 @@ async function searchByUsername() {
 // ---- 记录 ----
 const showNewRecord = ref(false)
 const newRecordText = ref('')
-const newRecordLevel = ref('green')
+const newRecordLevel = ref<Level>('green')
 
 function addRecord() { showNewRecord.value = true; newRecordText.value = ''; newRecordLevel.value = 'green' }
 function cancelNewRecord() { showNewRecord.value = false; newRecordText.value = '' }
@@ -245,7 +262,7 @@ function confirmNewRecord() {
   form.records.push({ id: Date.now(), text, level: newRecordLevel.value })
   showNewRecord.value = false; newRecordText.value = ''
 }
-function removeRecord(index) { form.records.splice(index, 1) }
+function removeRecord(index: number) { form.records.splice(index, 1) }
 
 // ---- 保存 / 删除 ----
 function buildData() {
@@ -268,8 +285,9 @@ async function handleSave() {
     beforeCreate(data) { data.osuUid = Number(form.osuUidInput) },
     id: form.osuUid,
     onError(err) {
-      const msg = String(err.message || err)
-      if (msg.includes('Key already exists') || err?.name === 'ConstraintError')
+      const e = err as { message?: string; name?: string }
+      const msg = String(e.message || err)
+      if (msg.includes('Key already exists') || e.name === 'ConstraintError')
         showToast('该 osu UID 已存在', 'error')
       else
         showToast('保存失败', 'error')

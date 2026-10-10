@@ -111,13 +111,12 @@ export const playersRepo = {
   },
 
   async update(osuUid: number, data: { nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[] }) {
-    return await db.players.update(osuUid, {
-      nicknames: data.nicknames || [],
-      primaryNickIndex: data.primaryNickIndex ?? 0,
-      contacts: data.contacts || emptyContacts(),
-      records: data.records || [],
-      updatedAt: Date.now()
-    })
+    const changes: { nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[]; updatedAt: number } = { updatedAt: Date.now() }
+    if (data.nicknames !== undefined) changes.nicknames = data.nicknames
+    if (data.primaryNickIndex !== undefined) changes.primaryNickIndex = data.primaryNickIndex
+    if (data.contacts !== undefined) changes.contacts = data.contacts
+    if (data.records !== undefined) changes.records = data.records
+    return await db.players.update(osuUid, changes)
   },
 
   async remove(osuUid: number) {
@@ -172,17 +171,19 @@ export const playersRepo = {
     let merged = 0
     const now = Date.now()
     for (const incoming of data.players) {
-      if (!incoming.osuUid) continue
+      // 归一化 UID：JSON 中可能是字符串 "12345"，与库里的数字键 12345 不匹配
+      const osuUid = Number(incoming.osuUid)
+      if (!Number.isInteger(osuUid) || osuUid < 1) continue
       // 兼容旧导出格式 primaryNickname（字符串）→ primaryNickIndex（索引）
       let incomingIndex = incoming.primaryNickIndex ?? 0
       if (incoming.primaryNickname && (!incoming.primaryNickIndex && incoming.primaryNickIndex !== 0)) {
         const found = (incoming.nicknames || []).indexOf(incoming.primaryNickname)
         if (found >= 0) incomingIndex = found
       }
-      const existing = await db.players.get(incoming.osuUid)
+      const existing = await db.players.get(osuUid)
       if (!existing) {
         await db.players.add({
-          osuUid: incoming.osuUid,
+          osuUid,
           nicknames: incoming.nicknames || [],
           primaryNickIndex: incomingIndex,
           contacts: incoming.contacts || emptyContacts(),
@@ -210,7 +211,7 @@ export const playersRepo = {
           const newIdx = mergedNicknames.indexOf(existingPrimaryNick)
           if (newIdx >= 0) mergedPrimaryIndex = newIdx
         }
-        await db.players.update(incoming.osuUid, {
+        await db.players.update(osuUid, {
           nicknames: mergedNicknames,
           primaryNickIndex: mergedPrimaryIndex,
           contacts: mergedContacts,
@@ -262,16 +263,15 @@ export const tournamentRepo = {
     })
   },
 
-  async update(id: number, data: { name: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
-    return await db.tournaments.update(id, {
-      name: data.name,
-      edition: data.edition || '',
-      ts: data.ts || 0,
-      ms: data.ms || 0,
-      rankSet: data.rankSet || [],
-      teams: data.teams || [],
-      updatedAt: Date.now()
-    })
+  async update(id: number, data: { name?: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
+    const changes: { name?: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[]; updatedAt: number } = { updatedAt: Date.now() }
+    if (data.name !== undefined) changes.name = data.name
+    if (data.edition !== undefined) changes.edition = data.edition
+    if (data.ts !== undefined) changes.ts = data.ts
+    if (data.ms !== undefined) changes.ms = data.ms
+    if (data.rankSet !== undefined) changes.rankSet = data.rankSet
+    if (data.teams !== undefined) changes.teams = data.teams
+    return await db.tournaments.update(id, changes)
   },
 
   async remove(id: number) {

@@ -97,24 +97,25 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { playersRepo } from '../db'
 import { formatDate } from '../utils/format'
 import { hasAnyContact } from '../utils/player'
+import type { Player } from '../types'
 
 const keyword = ref('')
 const sortBy = ref('uidAsc')
-const players = ref([])
+const players = ref<Player[]>([])
 const loading = ref(false)
-const failedAvatars = ref(new Set())
+const failedAvatars = ref<Set<number>>(new Set())
 const currentPage = ref(1)
 const pageSize = 18
 const totalCount = ref(0)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize)))
 
-function sortPlayers(list) {
+function sortPlayers(list: Player[]): Player[] {
   const sorted = [...list]
   sorted.sort((a, b) => {
     let cmp = 0
@@ -150,9 +151,9 @@ async function loadPlayers() {
   }
 }
 
-let searchTimer = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 function onSearchInput() {
-  clearTimeout(searchTimer)
+  if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     currentPage.value = 1
     loadPlayers()
@@ -170,22 +171,22 @@ function clearSearch() {
   loadPlayers()
 }
 
-function goToPage(page) {
+function goToPage(page: number) {
   if (page < 1 || page > totalPages.value) return
   currentPage.value = page
   loadPlayers()
 }
 
-function primaryName(p) {
+function primaryName(p: Player): string {
   return p.nicknames?.[p.primaryNickIndex ?? 0] || p.nicknames?.[0] || '#' + p.osuUid
 }
 
-function avatarInitial(p) {
+function avatarInitial(p: Player): string {
   const name = primaryName(p)
   return name ? name[0].toUpperCase() : p.osuUid ? String(p.osuUid)[0] : '?'
 }
 
-function onAvatarError(uid) {
+function onAvatarError(uid: number, _event?: Event) {
   failedAvatars.value.add(uid)
 }
 

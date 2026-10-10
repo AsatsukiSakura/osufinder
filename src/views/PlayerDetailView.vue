@@ -114,7 +114,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { playersRepo, tournamentRepo } from '../db'
@@ -122,15 +122,16 @@ import PlayerEditor from '../components/PlayerEditor.vue'
 import { getLevelLabel } from '../utils/level'
 import { hasAnyContact } from '../utils/player'
 import { fetchOsuUser } from '../api/osu'
+import type { Player, Tournament, Team } from '../types'
 
 const route = useRoute()
 const router = useRouter()
 
-const player = ref(null)
+const player = ref<Player | null>(null)
 const loading = ref(true)
 const isEditing = ref(false)
 const avatarFailed = ref(false)
-const tournaments = ref([])
+const tournaments = ref<Tournament[]>([])
 const refreshingOsu = ref(false)
 
 const avatarUrl = computed(() => {
@@ -147,18 +148,18 @@ const contactList = computed(() => [
   { type: 'twitter', icon: '🐦', label: 'Twitter',  values: player.value?.contacts?.twitter || [] },
 ])
 
-function primaryName(p) {
+function primaryName(p: Player): string {
   return p.nicknames?.[p.primaryNickIndex ?? 0] || p.nicknames?.[0] || '#' + p.osuUid
 }
 
-function getPlayerTeams(t) {
+function getPlayerTeams(t: Tournament): Team[] {
   const uid = Number(route.params.osuUid)
   return (t.teams || []).filter(team =>
     (team.members || []).includes(uid)
   )
 }
 
-function rankBadgeClass(rank) {
+function rankBadgeClass(rank: string): string {
   if (rank === '#1') return 'th-rank--gold'
   if (rank === '#2') return 'th-rank--silver'
   if (rank === '#3') return 'th-rank--bronze'
@@ -169,29 +170,32 @@ function startEdit() { isEditing.value = true }
 function cancelEdit() { isEditing.value = false }
 
 async function refreshOsuData() {
-  if (!player.value?.osuUid) return
+  const p = player.value
+  if (!p?.osuUid) return
   refreshingOsu.value = true
   try {
-    const user = await fetchOsuUser(player.value.osuUid)
+    const user = await fetchOsuUser(p.osuUid)
     if (!user || !user.username) {
       alert('未能在 osu! 找到该玩家')
       return
     }
     // 如果 osu! 用户名不在当前昵称列表中，则添加
-    const nicks = player.value.nicknames || []
+    const nicks = p.nicknames || []
     if (!nicks.some(n => n.toLowerCase() === user.username.toLowerCase())) {
       nicks.push(user.username)
-      await playersRepo.update(player.value.osuUid, {
-        ...player.value,
-        nicknames: nicks
+      await playersRepo.update(p.osuUid, {
+        nicknames: nicks,
+        primaryNickIndex: p.primaryNickIndex,
+        contacts: p.contacts,
+        records: p.records
       })
-      player.value = { ...player.value, nicknames: [...nicks] }
+      player.value = { ...p, nicknames: [...nicks] }
       alert(`已添加 osu! 用户名: ${user.username}`)
     } else {
       alert(`osu! 用户名 "${user.username}" 已在称呼列表中`)
     }
   } catch (err) {
-    alert('刷新失败: ' + (err.message || '请检查 API 凭证配置'))
+    alert('刷新失败: ' + (err instanceof Error ? err.message : '请检查 API 凭证配置'))
   } finally {
     refreshingOsu.value = false
   }
@@ -214,7 +218,7 @@ async function loadPlayer() {
   try {
     const uid = Number(route.params.osuUid)
     if (!uid) { loading.value = false; return }
-    player.value = await playersRepo.getByOsuUid(uid)
+    player.value = (await playersRepo.getByOsuUid(uid)) ?? null
     if (player.value) {
       tournaments.value = await tournamentRepo.findByPlayerOsuUid(uid)
     }

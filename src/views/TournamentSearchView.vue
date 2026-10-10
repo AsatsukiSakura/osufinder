@@ -50,7 +50,7 @@
         </div>
 
         <div v-if="t.teams && t.teams.length" class="card-teams">
-          <div v-for="team in topTeams(t)" :key="team._id || team.name" class="card-team-row">
+          <div v-for="team in topTeams(t)" :key="team.name" class="card-team-row">
             <span class="card-team-rank" :class="podiumRankBadgeClass(team.rank)">
               {{ team.rank || '-' }}
             </span>
@@ -70,14 +70,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { tournamentRepo } from '../db'
 import TournamentEditor from '../components/TournamentEditor.vue'
+import type { Tournament, Team } from '../types'
 
 const totalPages = computed(() => Math.ceil(totalCount.value / pageSize) || 1)
 
-function goPage(page) {
+function goPage(page: number) {
   currentPage.value = page
   loadTournaments()
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -90,7 +91,7 @@ function onSortChange() {
 
 const keyword = ref('')
 const sortBy = ref('uidAsc')
-const tournaments = ref([])
+const tournaments = ref<Tournament[]>([])
 const totalCount = ref(0)
 const currentPage = ref(1)
 const pageSize = 18
@@ -102,7 +103,7 @@ function onSaved() {
   loadTournaments()
 }
 
-function sortTournaments(list) {
+function sortTournaments(list: Tournament[]): Tournament[] {
   const sorted = [...list]
   sorted.sort((a, b) => {
     let cmp = 0
@@ -120,12 +121,12 @@ function sortTournaments(list) {
   return sorted
 }
 
-function rankNumber(rank) {
+function rankNumber(rank: string): number {
   const m = rank?.match(/^#(\d+)/)
-  return m ? parseInt(m[1]) : Infinity
+  return m ? parseInt(m[1], 10) : Infinity
 }
 
-function topTeams(t) {
+function topTeams(t: Tournament): Team[] {
   if (!t.teams?.length) return []
   return [...t.teams]
     .sort((a, b) => rankNumber(a.rank) - rankNumber(b.rank))
@@ -149,9 +150,9 @@ async function loadTournaments() {
   }
 }
 
-let searchTimer = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 function onSearchInput() {
-  clearTimeout(searchTimer)
+  if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     currentPage.value = 1
     loadTournaments()
@@ -164,7 +165,7 @@ function clearSearch() {
   loadTournaments()
 }
 
-function podiumRankBadgeClass(rank) {
+function podiumRankBadgeClass(rank: string): string {
   if (rank === '#1') return 'card-team-rank--gold'
   if (rank === '#2') return 'card-team-rank--silver'
   if (rank === '#3') return 'card-team-rank--bronze'

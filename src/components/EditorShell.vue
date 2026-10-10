@@ -21,16 +21,19 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  isEdit: { type: Boolean, default: false },
-  editLabel: { type: String, default: '编辑' },
-  addLabel: { type: String, default: '添加' },
-  lastUpdated: { type: String, default: '' },
-  toast: { type: Object, default: null }
-})
+<script setup lang="ts">
+import type { ToastMessage } from '../composables/useToast'
 
-defineEmits(['save', 'delete'])
+defineProps<{
+  isEdit?: boolean
+  editLabel?: string
+  addLabel?: string
+  lastUpdated?: string
+  toast?: ToastMessage | null
+}>()
 
-defineExpose({ $emit: (...args) => { /* expose emit for parent access */ } })
+defineEmits<{
+  (e: 'save'): void
+  (e: 'delete'): void
+}>()
 </script>

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="level-picker">
     <button
       v-for="lvl in levels"
@@ -14,17 +14,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import type { Level } from '../types'
 import { getLevelFullLabel } from '../utils/level'
 
-defineProps({
-  modelValue: { type: String, default: 'green' },
-  levels: { type: Array, default: () => ['green', 'yellow', 'red'] }
+withDefaults(defineProps<{
+  modelValue?: Level
+  levels?: Level[]
+}>(), {
+  modelValue: 'green',
+  levels: () => ['green', 'yellow', 'red']
 })
 
-defineEmits(['update:modelValue'])
+defineEmits<{
+  (e: 'update:modelValue', value: Level): void
+}>()
 
-function title(lvl) {
+function title(lvl: Level) {
   return getLevelFullLabel(lvl)
 }
 </script>

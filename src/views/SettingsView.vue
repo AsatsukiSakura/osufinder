@@ -63,6 +63,9 @@
           <p class="muted" style="margin-top: 8px; font-size: var(--font-size-xs);">
             在 <a href="https://osu.ppy.sh/home/account/edit#oauth" target="_blank" rel="noopener">osu! 账号设置 → OAuth</a> 创建新的 OAuth 应用获取凭证
           </p>
+          <p class="muted" style="margin-top: 4px; font-size: var(--font-size-xs);">
+            凭证仅保存在本机浏览器中，请勿在共用设备上保存。
+          </p>
         </div>
       </section>
 
@@ -193,7 +196,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { playersRepo, tournamentRepo } from '../db'
 import { useToast } from '../composables/useToast'
@@ -267,7 +270,7 @@ onMounted(async () => {
   await refreshStats()
 })
 
-function setTheme(theme) {
+function setTheme(theme: string) {
   document.documentElement.setAttribute('data-theme', theme)
   currentTheme.value = theme
   localStorage.setItem('app-theme', theme)
@@ -294,7 +297,7 @@ async function handleClearTournaments() {
   try {
     const all = await tournamentRepo.getAll()
     for (const t of all) {
-      await tournamentRepo.remove(t.id)
+      await tournamentRepo.remove(t.id as number)
     }
     showToast('已清空所有赛事', 'success')
   } catch (err) {
@@ -318,17 +321,17 @@ async function refreshStats() {
   }
 }
 
-async function handleExport(mode) {
+async function handleExport(mode: string) {
   try {
     const data = await playersRepo.exportData(mode)
-    if (!data.players.length) {
+    if (!data.players?.length) {
       showToast('没有可导出的数据', 'error')
       return
     }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    const modeLabels = { green: '绿色', yellow_and_below: '黄色以内', all: '全部' }
+    const modeLabels: Record<string, string> = { green: '绿色', yellow_and_below: '黄色以内', all: '全部' }
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     a.href = url
     a.download = `osufinder_${modeLabels[mode] || 'data'}_${dateStr}.json`
@@ -336,15 +339,16 @@ async function handleExport(mode) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    showToast(`已导出 ${data.players.length} 位玩家`, 'success')
+    showToast(`已导出 ${data.players?.length} 位玩家`, 'success')
   } catch (err) {
     console.error(err)
     showToast('导出失败', 'error')
   }
 }
 
-async function handleImportPlayers(event) {
-  const file = event.target.files && event.target.files[0]
+async function handleImportPlayers(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files && input.files[0]
   if (!file) return
   try {
     const text = await file.text()
@@ -352,8 +356,8 @@ async function handleImportPlayers(event) {
     if (!data || data.app !== 'osufinder' || !Array.isArray(data.players)) {
       throw new Error('文件格式不正确')
     }
-    if (!confirm(`即将从文件导入 ${data.players.length} 位玩家，是否继续？`)) {
-      event.target.value = ''
+    if (!confirm(`即将从文件导入 ${data.players?.length} 位玩家，是否继续？`)) {
+      input.value = ''
       return
     }
     const result = await playersRepo.importData(data)
@@ -361,16 +365,16 @@ async function handleImportPlayers(event) {
     showToast(`导入成功：新增 ${result.added} 位，合并 ${result.merged} 位`, 'success')
   } catch (err) {
     console.error(err)
-    showToast('导入失败：' + (err.message || '文件格式错误'), 'error')
+    showToast('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
   } finally {
-    event.target.value = ''
+    input.value = ''
   }
 }
 
 async function handleTournamentExport() {
   try {
     const data = await tournamentRepo.exportData()
-    if (!data.tournaments.length) {
+    if (!data.tournaments?.length) {
       showToast('没有可导出的赛事', 'error')
       return
     }
@@ -384,15 +388,16 @@ async function handleTournamentExport() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    showToast(`已导出 ${data.tournaments.length} 场赛事`, 'success')
+    showToast(`已导出 ${data.tournaments?.length} 场赛事`, 'success')
   } catch (err) {
     console.error(err)
     showToast('导出赛事失败', 'error')
   }
 }
 
-async function handleImportTournaments(event) {
-  const file = event.target.files && event.target.files[0]
+async function handleImportTournaments(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files && input.files[0]
   if (!file) return
   try {
     const text = await file.text()
@@ -400,8 +405,8 @@ async function handleImportTournaments(event) {
     if (!data || data.app !== 'osufinder' || !Array.isArray(data.tournaments)) {
       throw new Error('文件格式不正确')
     }
-    if (!confirm(`即将从文件导入 ${data.tournaments.length} 场赛事，是否继续？`)) {
-      event.target.value = ''
+    if (!confirm(`即将从文件导入 ${data.tournaments?.length} 场赛事，是否继续？`)) {
+      input.value = ''
       return
     }
     const result = await tournamentRepo.importData(data)
@@ -409,13 +414,13 @@ async function handleImportTournaments(event) {
     showToast(`导入成功：新增 ${result.added} 场，合并 ${result.merged} 场`, 'success')
   } catch (err) {
     console.error(err)
-    showToast('导入失败：' + (err.message || '文件格式错误'), 'error')
+    showToast('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
   } finally {
-    event.target.value = ''
+    input.value = ''
   }
 }
 
-function formatBytes(bytes) {
+function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0

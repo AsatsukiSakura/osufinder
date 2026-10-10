@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="field-group">
     <label class="field-label">名次设置</label>
 
@@ -46,34 +46,43 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
+import type { RankSetItem } from '../types'
 
-const props = defineProps({
-  modelValue: { type: Array, default: () => [] }
+const props = withDefaults(defineProps<{
+  modelValue?: RankSetItem[]
+}>(), {
+  modelValue: () => []
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: RankSetItem[]): void
+}>()
 
 const items = computed(() => props.modelValue)
+
+
+
+
 
 const showAdd = ref(false)
 const newL = ref('')
 const newR = ref('')
 const addError = ref('')
 
-function display(item) {
+function display(item: RankSetItem) {
   return item.l === item.r ? `#${item.l}` : `#${item.l}~#${item.r}`
 }
 
-function podiumClass(item) {
+function podiumClass(item: RankSetItem) {
   if (item.l === 1 && item.r === 1) return 'rank-tag--gold'
   if (item.l === 2 && item.r === 2) return 'rank-tag--silver'
   if (item.l === 3 && item.r === 3) return 'rank-tag--bronze'
   return ''
 }
 
-function validate(l, r) {
+function validate(l: number, r: number): string | null {
   if (!l || l < 1) return '起始名次必须 ≥ 1'
   if (!r || r < l) return '结束名次必须 ≥ 起始名次'
   // 检查是否与现有区间重叠
@@ -87,8 +96,8 @@ function validate(l, r) {
 }
 
 function handleAdd() {
-  const l = parseInt(newL.value)
-  const r = parseInt(newR.value)
+  const l = parseInt(newL.value, 10)
+  const r = parseInt(newR.value, 10)
   const err = validate(l, r)
   if (err) {
     addError.value = err
@@ -105,7 +114,7 @@ function cancelAdd() {
   addError.value = ''
 }
 
-function remove(i) {
+function remove(i: number) {
   emit('update:modelValue', items.value.filter((_, idx) => idx !== i))
 }
 </script>

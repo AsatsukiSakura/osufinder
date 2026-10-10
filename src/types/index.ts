@@ -104,33 +104,3 @@ export interface TournamentExport {
   createdAt: number
   updatedAt: number
 }
-
-// ===== DB 仓库接口 =====
-
-export interface PlayerRepo {
-  getAll(): Promise<Player[]>
-  search(keyword: string): Promise<Player[]>
-  searchPaginated(keyword: string, page: number, pageSize: number): Promise<{ items: Player[]; total: number }>
-  getByOsuUid(osuUid: number): Promise<Player | undefined>
-  create(data: Partial<Player> & { osuUid: number }): Promise<number>
-  update(osuUid: number, data: Partial<Player>): Promise<void>
-  remove(osuUid: number): Promise<void>
-  count(): Promise<number>
-  getStats(): Promise<{ playerCount: number; recordCount: number }>
-  exportData(mode?: string): Promise<ExportData>
-  importData(data: ExportData): Promise<{ added: number; merged: number; total: number }>
-}
-
-export interface TournamentRepo {
-  getAll(): Promise<Tournament[]>
-  search(keyword: string): Promise<Tournament[]>
-  getById(id: number): Promise<Tournament | undefined>
-  findByPlayerOsuUid(osuUid: number): Promise<Tournament[]>
-  create(data: Partial<Tournament>): Promise<number>
-  update(id: number, data: Partial<Tournament>): Promise<void>
-  remove(id: number): Promise<void>
-  count(): Promise<number>
-  exportData(): Promise<ExportData>
-  importData(data: ExportData): Promise<{ added: number; merged: number }>
-  getStats(): Promise<{ tournamentCount: number; teamCount: number }>
-}

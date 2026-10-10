@@ -14,12 +14,12 @@
 
       <div class="tournament-card-detail">
         <div class="tournament-head">
-          <h2 class="tournament-name">{{ tournament.name }}</h2>
-          <span v-if="tournament.edition" class="tournament-edition">{{ tournament.edition }}</span>
+          <h2 class="tournament-name">{{ tournament?.name }}</h2>
+          <span v-if="tournament?.edition" class="tournament-edition">{{ tournament?.edition }}</span>
         </div>
 
-        <div v-if="tournament.teams && tournament.teams.length" class="teams-display">
-          <h3 class="section-title">参赛队伍（{{ tournament.teams.length }}）</h3>
+        <div v-if="tournament?.teams?.length" class="teams-display">
+          <h3 class="section-title">参赛队伍（{{ tournament?.teams?.length }}）</h3>
           <div class="teams-grid">
             <div
               v-for="(team, i) in sortedTeams"
@@ -62,17 +62,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { tournamentRepo } from '../db'
 import TournamentEditor from '../components/TournamentEditor.vue'
 import { usePlayerNames } from '../composables/usePlayerNames'
+import type { Tournament } from '../types'
 
 const route = useRoute()
 const router = useRouter()
 
-const tournament = ref(null)
+const tournament = ref<Tournament | null>(null)
 const loading = ref(true)
 const isEditing = ref(false)
 const { playerNameMap, playerName, loadPlayerNames } = usePlayerNames()
@@ -86,7 +87,7 @@ const viewState = computed(() => {
 const sortedTeams = computed(() => {
   if (!tournament.value?.teams) return []
   return [...tournament.value.teams].map(t => {
-    const num = parseFloat(t.rank?.replace('#', ''))
+    const num = parseFloat((t.rank || '').replace('#', ''))
     return {
       ...t,
       _sortKey: isNaN(num) ? Infinity : num
@@ -94,14 +95,14 @@ const sortedTeams = computed(() => {
   }).sort((a, b) => a._sortKey - b._sortKey)
 })
 
-function podiumCardClass(rank) {
+function podiumCardClass(rank: string): string {
   if (rank === '#1') return 'team-detail-card--gold'
   if (rank === '#2') return 'team-detail-card--silver'
   if (rank === '#3') return 'team-detail-card--bronze'
   return ''
 }
 
-function podiumRankClass(rank) {
+function podiumRankClass(rank: string): string {
   if (rank === '#1') return 'team-detail-rank--gold'
   if (rank === '#2') return 'team-detail-rank--silver'
   if (rank === '#3') return 'team-detail-rank--bronze'
@@ -120,7 +121,7 @@ async function loadTournament() {
       tournamentRepo.getById(id),
       loadPlayerNames()
     ])
-    tournament.value = t
+    tournament.value = t ?? null
   } catch (err) {
     console.error('加载赛事详情失败:', err)
     tournament.value = null

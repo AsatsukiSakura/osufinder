@@ -52,18 +52,25 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { playersRepo } from '../db'
 import { usePlayerNames } from '../composables/usePlayerNames'
 import { useToast } from '../composables/useToast'
+import type { Player, Team } from '../types'
 
-const props = defineProps({
-  team: { type: Object, default: null },
-  index: { type: Number, default: 0 }
+const props = withDefaults(defineProps<{
+  team?: Team | null
+  index?: number
+}>(), {
+  team: null,
+  index: 0
 })
 
-const emit = defineEmits(['save', 'cancel'])
+const emit = defineEmits<{
+  (e: 'save', data: { name: string; members: number[] }): void
+  (e: 'cancel'): void
+}>()
 
 const isNew = !props.team
 const { playerNameMap, playerName, loadPlayerNames } = usePlayerNames()
@@ -74,14 +81,14 @@ const form = reactive({
 })
 
 const memberInput = ref('')
-const searchResults = ref(null)
+const searchResults = ref<Player[] | null>(null)
 
 // ---- 队员搜索 ----
-let searchTimer = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 async function onSearch() {
   const kw = memberInput.value.trim()
   if (!kw) { searchResults.value = null; return }
-  clearTimeout(searchTimer)
+  if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(async () => {
     const all = await playersRepo.getAll()
     const q = kw.toLowerCase()
@@ -95,7 +102,7 @@ function addFirstResult() {
   if (searchResults.value?.length) selectMember(searchResults.value[0])
 }
 
-function selectMember(player) {
+function selectMember(player: Player) {
   const uid = Number(player.osuUid)
   if (uid && !form.members.includes(uid)) {
     form.members.push(uid)
@@ -109,11 +116,11 @@ function onBlur() {
   setTimeout(() => { searchResults.value = null }, 150)
 }
 
-function removeMember(i) {
+function removeMember(i: number) {
   form.members.splice(i, 1)
 }
 
-const { toast, showToast } = useToast()
+const { showToast } = useToast()
 
 function confirm() {
   if (!form.name.trim()) {
