@@ -22,12 +22,79 @@ db.version(7).stores({
   tournaments: '++id'
 })
 
+// v8：补齐索引。赛事导入依赖 name 索引（v7 中未建索引会直接抛错）
+db.version(8).stores({
+  players: 'osuUid, updatedAt',
+  tournaments: '++id, name'
+})
+
 const emptyContacts = (): PlayerContacts => ({
   qq: [],
   bili: [],
   discord: [],
   twitter: []
 })
+
+let teamIdSeed = 0
+
+/** 统一联系方式结构，缺失字段补空数组，非字符串值丢弃 */
+export function normalizeContacts(raw?: Partial<PlayerContacts> | null): PlayerContacts {
+  const pick = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? Array.from(new Set(v.map((x) => String(x).trim()).filter(Boolean)))
+      : []
+  return {
+    qq: pick(raw?.qq),
+    bili: pick(raw?.bili),
+    discord: pick(raw?.discord),
+    twitter: pick(raw?.twitter)
+  }
+}
+
+/** 统一记录结构，过滤空文本 */
+export function normalizeRecords(raw?: unknown[] | null): PlayerRecord[] {
+  if (!Array.isArray(raw)) return []
+  const levels: Level[] = ['green', 'yellow', 'red']
+  return raw
+    .map((item, index) => {
+      const r = (item || {}) as Partial<PlayerRecord>
+      const text = String(r.text ?? '').trim()
+      return {
+        id: typeof r.id === 'number' ? r.id : Date.now() + index,
+        text,
+        level: levels.includes(r.level as Level) ? (r.level as Level) : 'green'
+      }
+    })
+    .filter((r) => r.text.length > 0)
+}
+
+/** 统一队伍结构，保证 _id 唯一，队员为正整数 UID */
+export function normalizeTeams(raw?: unknown[] | null): Team[] {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const teams: Team[] = []
+  for (const item of raw) {
+    const t = (item || {}) as Partial<Team> & { members?: unknown[] }
+    const name = String(t.name ?? '').trim()
+    if (!name) continue
+    let id = String(t._id ?? '').trim()
+    if (!id || seen.has(id)) id = `team_${Date.now()}_${teamIdSeed++}`
+    seen.add(id)
+    teams.push({
+      _id: id,
+      name,
+      members: Array.isArray(t.members)
+        ? Array.from(new Set(
+            t.members
+              .map((m) => (typeof m === 'object' && m !== null ? Number((m as { osuUid?: unknown }).osuUid) : Number(m)))
+              .filter((uid) => Number.isInteger(uid) && uid > 0)
+          ))
+        : [],
+      rank: String(t.rank ?? '').trim()
+    })
+  }
+  return teams
+}
 
 // 通用全表扫描：读取全部记录 → 可选过滤 → 按 updatedAt 降序排列
 async function scanTable<T extends { updatedAt?: number }>(
@@ -63,6 +130,23 @@ function matchTournament(t: Tournament, kw: string): boolean {
   return false
 }
 
+/** 合并两队队员与名次信息 */
+function mergeTeams(existing: Team[], incoming: Team[]): Team[] {
+  const result = existing.map((t) => ({ ...t, members: [...t.members] }))
+  for (const inc of incoming) {
+    const target = result.find((t) => t._id === inc._id)
+      || result.find((t) => t.name.toLowerCase() === inc.name.toLowerCase())
+    if (!target) {
+      result.push({ ...inc, members: [...inc.members] })
+      continue
+    }
+    target.members = Array.from(new Set([...target.members, ...inc.members]))
+    if (!target.rank && inc.rank) target.rank = inc.rank
+    if (!target.name && inc.name) target.name = inc.name
+  }
+  return result
+}
+
 export const playersRepo = {
   getAll(): Promise<PlayerTable[]> {
     return scanTable(db.players)
@@ -81,30 +165,25 @@ export const playersRepo = {
       }
     }
 
-    if (kw.length < 2) return []
     return scanTable(db.players, (p) => matchPlayer(p, kw))
-  },
-
-  async searchPaginated(keyword: string, page = 1, pageSize = 20) {
-    const all = await this.search(keyword)
-    const total = all.length
-    const start = (page - 1) * pageSize
-    const items = all.slice(start, start + pageSize)
-    return { items, total }
   },
 
   async getByOsuUid(osuUid: number) {
     return await db.players.get(osuUid)
   },
 
+  async exists(osuUid: number) {
+    return (await db.players.get(osuUid)) !== undefined
+  },
+
   async create(data: { osuUid: number; nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[] }) {
     const now = Date.now()
     return await db.players.add({
       osuUid: data.osuUid,
-      nicknames: data.nicknames || [],
+      nicknames: Array.from(new Set((data.nicknames || []).map((n) => n.trim()).filter(Boolean))),
       primaryNickIndex: data.primaryNickIndex ?? 0,
-      contacts: data.contacts || emptyContacts(),
-      records: data.records || [],
+      contacts: normalizeContacts(data.contacts),
+      records: normalizeRecords(data.records),
       createdAt: now,
       updatedAt: now
     })
@@ -112,10 +191,10 @@ export const playersRepo = {
 
   async update(osuUid: number, data: { nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[] }) {
     const changes: { nicknames?: string[]; primaryNickIndex?: number; contacts?: PlayerContacts; records?: PlayerRecord[]; updatedAt: number } = { updatedAt: Date.now() }
-    if (data.nicknames !== undefined) changes.nicknames = data.nicknames
+    if (data.nicknames !== undefined) changes.nicknames = Array.from(new Set(data.nicknames.map((n) => n.trim()).filter(Boolean)))
     if (data.primaryNickIndex !== undefined) changes.primaryNickIndex = data.primaryNickIndex
-    if (data.contacts !== undefined) changes.contacts = data.contacts
-    if (data.records !== undefined) changes.records = data.records
+    if (data.contacts !== undefined) changes.contacts = normalizeContacts(data.contacts)
+    if (data.records !== undefined) changes.records = normalizeRecords(data.records)
     return await db.players.update(osuUid, changes)
   },
 
@@ -125,6 +204,10 @@ export const playersRepo = {
 
   async count() {
     return await db.players.count()
+  },
+
+  async clearAll() {
+    return await db.players.clear()
   },
 
   async getStats() {
@@ -148,8 +231,8 @@ export const playersRepo = {
       osuUid: p.osuUid,
       nicknames: p.nicknames || [],
       primaryNickIndex: p.primaryNickIndex ?? 0,
-      contacts: p.contacts || emptyContacts(),
-      records: (p.records || []).filter(r => allowedLevels.includes(r.level)),
+      contacts: normalizeContacts(p.contacts),
+      records: normalizeRecords(p.records).filter(r => allowedLevels.includes(r.level)),
       createdAt: p.createdAt,
       updatedAt: p.updatedAt
     }))
@@ -174,37 +257,39 @@ export const playersRepo = {
       // 归一化 UID：JSON 中可能是字符串 "12345"，与库里的数字键 12345 不匹配
       const osuUid = Number(incoming.osuUid)
       if (!Number.isInteger(osuUid) || osuUid < 1) continue
+      const incomingNicknames = Array.from(new Set((incoming.nicknames || []).map((n) => String(n).trim()).filter(Boolean)))
       // 兼容旧导出格式 primaryNickname（字符串）→ primaryNickIndex（索引）
       let incomingIndex = incoming.primaryNickIndex ?? 0
-      if (incoming.primaryNickname && (!incoming.primaryNickIndex && incoming.primaryNickIndex !== 0)) {
-        const found = (incoming.nicknames || []).indexOf(incoming.primaryNickname)
+      if (incoming.primaryNickname && (incoming as { primaryNickIndex?: number }).primaryNickIndex === undefined) {
+        const found = incomingNicknames.indexOf(incoming.primaryNickname)
         if (found >= 0) incomingIndex = found
       }
       const existing = await db.players.get(osuUid)
       if (!existing) {
         await db.players.add({
           osuUid,
-          nicknames: incoming.nicknames || [],
+          nicknames: incomingNicknames,
           primaryNickIndex: incomingIndex,
-          contacts: incoming.contacts || emptyContacts(),
-          records: incoming.records || [],
+          contacts: normalizeContacts(incoming.contacts),
+          records: normalizeRecords(incoming.records),
           createdAt: incoming.createdAt || now,
           updatedAt: now
         })
         added++
       } else {
-        const mergedNicknames = Array.from(new Set([...(existing.nicknames || []), ...(incoming.nicknames || [])]))
-        const existingContacts = existing.contacts || emptyContacts()
-        const incomingContacts = incoming.contacts || emptyContacts()
+        const mergedNicknames = Array.from(new Set([...(existing.nicknames || []), ...incomingNicknames]))
+        const existingContacts = normalizeContacts(existing.contacts)
+        const incomingContacts = normalizeContacts(incoming.contacts)
         const mergedContacts: PlayerContacts = {
           qq: Array.from(new Set([...existingContacts.qq, ...incomingContacts.qq])),
           bili: Array.from(new Set([...existingContacts.bili, ...incomingContacts.bili])),
           discord: Array.from(new Set([...existingContacts.discord, ...incomingContacts.discord])),
           twitter: Array.from(new Set([...existingContacts.twitter, ...incomingContacts.twitter]))
         }
-        const existingTexts = new Set((existing.records || []).map(r => r.text.trim().toLowerCase()))
-        const newRecords = (incoming.records || []).filter(r => !existingTexts.has(r.text.trim().toLowerCase()))
-        const mergedRecords = [...(existing.records || []), ...newRecords]
+        const existingRecords = normalizeRecords(existing.records)
+        const existingTexts = new Set(existingRecords.map(r => r.text.toLowerCase()))
+        const newRecords = normalizeRecords(incoming.records).filter(r => !existingTexts.has(r.text.toLowerCase()))
+        const mergedRecords = [...existingRecords, ...newRecords]
         const existingPrimaryNick = (existing.nicknames || [])[existing.primaryNickIndex ?? 0]
         let mergedPrimaryIndex = 0
         if (existingPrimaryNick) {
@@ -233,7 +318,6 @@ export const tournamentRepo = {
   search(keyword: string): Promise<Tournament[]> {
     const kw = keyword.trim().toLowerCase()
     if (!kw) return this.getAll()
-    if (kw.length < 2) return Promise.resolve([])
     return scanTable(db.tournaments, (t) => matchTournament(t, kw))
   },
 
@@ -252,12 +336,12 @@ export const tournamentRepo = {
   async create(data: { name: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
     const now = Date.now()
     return await db.tournaments.add({
-      name: data.name,
+      name: data.name.trim(),
       edition: data.edition || '',
       ts: data.ts || 0,
       ms: data.ms || 0,
       rankSet: data.rankSet || [],
-      teams: data.teams || [],
+      teams: normalizeTeams(data.teams),
       createdAt: now,
       updatedAt: now
     })
@@ -265,12 +349,12 @@ export const tournamentRepo = {
 
   async update(id: number, data: { name?: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[] }) {
     const changes: { name?: string; edition?: string; ts?: number; ms?: number; rankSet?: { l: number; r: number }[]; teams?: Team[]; updatedAt: number } = { updatedAt: Date.now() }
-    if (data.name !== undefined) changes.name = data.name
+    if (data.name !== undefined) changes.name = data.name.trim()
     if (data.edition !== undefined) changes.edition = data.edition
     if (data.ts !== undefined) changes.ts = data.ts
     if (data.ms !== undefined) changes.ms = data.ms
     if (data.rankSet !== undefined) changes.rankSet = data.rankSet
-    if (data.teams !== undefined) changes.teams = data.teams
+    if (data.teams !== undefined) changes.teams = normalizeTeams(data.teams)
     return await db.tournaments.update(id, changes)
   },
 
@@ -282,6 +366,10 @@ export const tournamentRepo = {
     return await db.tournaments.count()
   },
 
+  async clearAll() {
+    return await db.tournaments.clear()
+  },
+
   async exportData(): Promise<ExportData> {
     const all = await this.getAll()
     const tournaments: TournamentExport[] = all.map(t => ({
@@ -290,7 +378,7 @@ export const tournamentRepo = {
       ts: t.ts || 0,
       ms: t.ms || 0,
       rankSet: t.rankSet || [],
-      teams: t.teams || [],
+      teams: normalizeTeams(t.teams),
       createdAt: t.createdAt,
       updatedAt: t.updatedAt
     }))
@@ -310,32 +398,33 @@ export const tournamentRepo = {
     let added = 0
     let merged = 0
     const now = Date.now()
-    for (const incoming of data.tournaments!) {
-      if (!incoming.name) continue
+    for (const incoming of data.tournaments) {
+      const name = String(incoming.name ?? '').trim()
+      if (!name) continue
+      const edition = String(incoming.edition ?? '').trim()
+      const incomingTeams = normalizeTeams(incoming.teams)
       const existing = await db.tournaments
-        .where('name').equals(incoming.name)
-        .and(t => t.edition === (incoming.edition || ''))
+        .where('name').equals(name)
+        .filter(t => (t.edition || '') === edition)
         .first()
       if (!existing) {
         await db.tournaments.add({
-          name: incoming.name,
-          edition: incoming.edition || '',
+          name,
+          edition,
           ts: incoming.ts || 0,
           ms: incoming.ms || 0,
           rankSet: incoming.rankSet || [],
-          teams: incoming.teams || [],
+          teams: incomingTeams,
           createdAt: incoming.createdAt || now,
           updatedAt: now
         })
         added++
       } else {
         await db.tournaments.update(existing.id!, {
-          name: incoming.name,
-          edition: incoming.edition || '',
-          ts: incoming.ts || 0,
-          ms: incoming.ms || 0,
-          rankSet: incoming.rankSet || [],
-          teams: existing.teams && existing.teams.length > 0 ? existing.teams : (incoming.teams || []),
+          ts: incoming.ts || existing.ts || 0,
+          ms: incoming.ms || existing.ms || 0,
+          rankSet: (incoming.rankSet && incoming.rankSet.length) ? incoming.rankSet : (existing.rankSet || []),
+          teams: mergeTeams(normalizeTeams(existing.teams), incomingTeams),
           updatedAt: now
         })
         merged++

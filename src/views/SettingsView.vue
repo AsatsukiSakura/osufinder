@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="settings-view">
     <header class="page-header">
       <h2 class="page-title">设置</h2>
       <p class="page-subtitle">个性化你的 osu!Finder</p>
@@ -16,25 +16,37 @@
           <button
             type="button"
             class="theme-option"
-            :class="{ active: currentTheme === 'light' }"
-            @click="setTheme('light')"
+            :class="{ active: mode === 'light' }"
+            @click="changeTheme('light')"
           >
             <div class="theme-preview theme-preview--light">
-              <div class="swatch"></div>
+              <span class="swatch"></span>
             </div>
-            <span>浅色</span>
+            <span class="theme-option-label"><AppIcon name="sun" :size="14" /> 浅色</span>
           </button>
 
           <button
             type="button"
             class="theme-option"
-            :class="{ active: currentTheme === 'dark' }"
-            @click="setTheme('dark')"
+            :class="{ active: mode === 'dark' }"
+            @click="changeTheme('dark')"
           >
             <div class="theme-preview theme-preview--dark">
-              <div class="swatch"></div>
+              <span class="swatch"></span>
             </div>
-            <span>深色</span>
+            <span class="theme-option-label"><AppIcon name="moon" :size="14" /> 深色</span>
+          </button>
+
+          <button
+            type="button"
+            class="theme-option"
+            :class="{ active: mode === 'system' }"
+            @click="changeTheme('system')"
+          >
+            <div class="theme-preview theme-preview--system">
+              <span class="swatch"></span>
+            </div>
+            <span class="theme-option-label"><AppIcon name="monitor" :size="14" /> 跟随系统</span>
           </button>
         </div>
       </section>
@@ -60,10 +72,10 @@
             </button>
             <button v-if="hasApiConfig" type="button" class="btn btn-secondary" @click="clearApiConfig">清除凭证</button>
           </div>
-          <p class="muted" style="margin-top: 8px; font-size: var(--font-size-xs);">
+          <p class="muted hint-line">
             在 <a href="https://osu.ppy.sh/home/account/edit#oauth" target="_blank" rel="noopener">osu! 账号设置 → OAuth</a> 创建新的 OAuth 应用获取凭证
           </p>
-          <p class="muted" style="margin-top: 4px; font-size: var(--font-size-xs);">
+          <p class="muted hint-line">
             凭证仅保存在本机浏览器中，请勿在共用设备上保存。
           </p>
         </div>
@@ -71,8 +83,8 @@
 
       <section class="setting-card">
         <div class="setting-header">
-          <h3>数据管理</h3>
-          <p class="muted">管理本地存储的数据</p>
+          <h3>数据概览</h3>
+          <p class="muted">当前本地存储的数据量</p>
         </div>
 
         <div class="data-stats">
@@ -93,7 +105,7 @@
             <span class="stat-value">{{ stats.teamCount }}</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">存储空间占用</span>
+            <span class="stat-label">存储占用</span>
             <span class="stat-value">{{ formatBytes(stats.storageBytes) }}</span>
           </div>
         </div>
@@ -132,11 +144,11 @@
             </div>
           </div>
           <div class="export-group">
-            <span class="export-group-label">赛事数据</span>
+            <span class="export-group-label">整包备份</span>
             <div class="export-options">
-              <button type="button" class="btn export-btn" @click="handleTournamentExport">
+              <button type="button" class="btn export-btn" @click="handleBackupExport">
                 <span class="export-dot export-dot--all"></span>
-                导出所有赛事
+                导出玩家 + 赛事完整备份
               </button>
             </div>
           </div>
@@ -167,7 +179,17 @@
                 <span>选择 JSON 文件导入赛事</span>
                 <input type="file" accept=".json,application/json" @change="handleImportTournaments" class="file-input" />
               </label>
-              <p class="muted import-hint">已有赛事将按名称 + 届次合并，已有队伍不会被覆盖</p>
+              <p class="muted import-hint">已有赛事将按名称 + 届次合并，队伍会按 ID 合并而非覆盖</p>
+            </div>
+          </div>
+          <div class="export-group">
+            <span class="export-group-label">整包恢复</span>
+            <div class="import-options">
+              <label class="btn btn-secondary import-btn">
+                <span>选择备份文件整体恢复</span>
+                <input type="file" accept=".json,application/json" @change="handleImportBackup" class="file-input" />
+              </label>
+              <p class="muted import-hint">自动识别文件中的玩家与赛事数据，并分别合并</p>
             </div>
           </div>
         </div>
@@ -191,28 +213,40 @@
         </ul>
       </section>
     </div>
-
-    <div v-if="toast" class="toast" :class="toast.type">{{ toast.text }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { playersRepo, tournamentRepo } from '../db'
-import { useToast } from '../composables/useToast'
+import { showToast } from '../composables/useToast'
+import { confirmAction } from '../composables/useDialog'
+import { useTheme, type ThemeMode } from '../composables/useTheme'
 import { getApiConfig, setApiConfig, removeApiConfig } from '../api/storage'
 import { verifyCredentials } from '../api/osu'
-import { version } from '../../package.json'
+import AppIcon from '../components/AppIcon.vue'
+import type { ExportData } from '../types'
+import { version, dependencies, devDependencies } from '../../package.json'
 
 const stats = ref({ playerCount: 0, recordCount: 0, tournamentCount: 0, teamCount: 0, storageBytes: 0 })
-const currentTheme = ref('light')
-const { toast, showToast } = useToast()
+const { mode, setTheme: applyThemeMode } = useTheme()
 
 // osu! API 凭证
 const apiClientId = ref('')
 const apiClientSecret = ref('')
 const apiSaving = ref(false)
 const hasApiConfig = ref(false)
+
+function stripRange(v: string) {
+  return v.replace(/^[^\d]*/, '')
+}
+
+const deps = {
+  vue: stripRange(dependencies.vue),
+  vueRouter: stripRange(dependencies['vue-router']),
+  dexie: stripRange(dependencies.dexie),
+  vite: stripRange(devDependencies.vite)
+}
 
 function loadApiConfig() {
   const config = getApiConfig()
@@ -255,54 +289,47 @@ function clearApiConfig() {
   showToast('API 凭证已清除', 'success')
 }
 
-const deps = {
-  vue: '3.5.34',
-  vueRouter: '4.6.4',
-  dexie: '4.4.3',
-  vite: '8.0.12'
-}
-
 onMounted(async () => {
-  currentTheme.value =
-    document.documentElement.getAttribute('data-theme') ||
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
   loadApiConfig()
   await refreshStats()
 })
 
-function setTheme(theme: string) {
-  document.documentElement.setAttribute('data-theme', theme)
-  currentTheme.value = theme
-  localStorage.setItem('app-theme', theme)
-  showToast('主题已切换', 'success')
+function changeTheme(next: ThemeMode) {
+  applyThemeMode(next)
 }
 
 async function handleClearPlayers() {
-  if (!confirm('确定要删除所有玩家数据吗？此操作不可撤销。')) return
+  const ok = await confirmAction({
+    title: '清空所有玩家',
+    message: '确定要删除所有玩家数据吗？此操作不可撤销。',
+    confirmText: '清空',
+    danger: true
+  })
+  if (!ok) return
   try {
-    const all = await playersRepo.getAll()
-    for (const p of all) {
-      await playersRepo.remove(p.osuUid)
-    }
+    await playersRepo.clearAll()
     showToast('已清空所有玩家', 'success')
   } catch (err) {
     console.error('清空玩家失败:', err)
-    showToast('清空操作部分失败，请刷新后重试', 'error')
+    showToast('清空失败，请刷新后重试', 'error')
   }
   await refreshStats()
 }
 
 async function handleClearTournaments() {
-  if (!confirm('确定要删除所有赛事数据吗？此操作不可撤销。')) return
+  const ok = await confirmAction({
+    title: '清空所有赛事',
+    message: '确定要删除所有赛事数据吗？此操作不可撤销。',
+    confirmText: '清空',
+    danger: true
+  })
+  if (!ok) return
   try {
-    const all = await tournamentRepo.getAll()
-    for (const t of all) {
-      await tournamentRepo.remove(t.id as number)
-    }
+    await tournamentRepo.clearAll()
     showToast('已清空所有赛事', 'success')
   } catch (err) {
     console.error('清空赛事失败:', err)
-    showToast('清空操作部分失败，请刷新后重试', 'error')
+    showToast('清空失败，请刷新后重试', 'error')
   }
   await refreshStats()
 }
@@ -321,102 +348,147 @@ async function refreshStats() {
   }
 }
 
-async function handleExport(mode: string) {
+function downloadJson(data: unknown, filename: string) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function dateStamp() {
+  return new Date().toISOString().slice(0, 10).replace(/-/g, '')
+}
+
+async function handleExport(modeKey: string) {
   try {
-    const data = await playersRepo.exportData(mode)
+    const data = await playersRepo.exportData(modeKey)
     if (!data.players?.length) {
       showToast('没有可导出的数据', 'error')
       return
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
     const modeLabels: Record<string, string> = { green: '绿色', yellow_and_below: '黄色以内', all: '全部' }
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    a.href = url
-    a.download = `osufinder_${modeLabels[mode] || 'data'}_${dateStr}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    showToast(`已导出 ${data.players?.length} 位玩家`, 'success')
+    downloadJson(data, `osufinder_${modeLabels[modeKey] || 'data'}_${dateStamp()}.json`)
+    showToast(`已导出 ${data.players.length} 位玩家`, 'success')
   } catch (err) {
     console.error(err)
     showToast('导出失败', 'error')
   }
 }
 
-async function handleImportPlayers(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files && input.files[0]
-  if (!file) return
+async function handleBackupExport() {
   try {
-    const text = await file.text()
-    const data = JSON.parse(text)
-    if (!data || data.app !== 'osufinder' || !Array.isArray(data.players)) {
-      throw new Error('文件格式不正确')
-    }
-    if (!confirm(`即将从文件导入 ${data.players?.length} 位玩家，是否继续？`)) {
-      input.value = ''
+    const [playerData, tournamentData] = await Promise.all([
+      playersRepo.exportData('all'),
+      tournamentRepo.exportData()
+    ])
+    if (!playerData.players?.length && !tournamentData.tournaments?.length) {
+      showToast('没有可导出的数据', 'error')
       return
     }
+    downloadJson(
+      {
+        app: 'osufinder',
+        kind: 'backup',
+        exportedAt: Date.now(),
+        players: playerData.players || [],
+        tournaments: tournamentData.tournaments || []
+      },
+      `osufinder_backup_${dateStamp()}.json`
+    )
+    showToast('完整备份已导出', 'success')
+  } catch (err) {
+    console.error(err)
+    showToast('导出备份失败', 'error')
+  }
+}
+
+async function readJsonFile(event: Event): Promise<ExportData | null> {
+  const input = event.target as HTMLInputElement
+  const file = input.files && input.files[0]
+  if (!file) return null
+  try {
+    const data = JSON.parse(await file.text()) as Record<string, unknown>
+    if (!data || data.app !== 'osufinder') throw new Error('文件格式不正确')
+    return data as unknown as ExportData
+  } finally {
+    input.value = ''
+  }
+}
+
+async function handleImportPlayers(event: Event) {
+  try {
+    const data = await readJsonFile(event)
+    if (!data) return
+    if (!Array.isArray(data.players)) throw new Error('文件中没有玩家数据')
+    const count = data.players.length
+    const ok = await confirmAction({
+      title: '导入玩家',
+      message: `即将从文件导入 ${count} 位玩家，已有数据会自动合并，是否继续？`,
+      confirmText: '导入'
+    })
+    if (!ok) return
     const result = await playersRepo.importData(data)
     await refreshStats()
     showToast(`导入成功：新增 ${result.added} 位，合并 ${result.merged} 位`, 'success')
   } catch (err) {
     console.error(err)
     showToast('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
-  } finally {
-    input.value = ''
-  }
-}
-
-async function handleTournamentExport() {
-  try {
-    const data = await tournamentRepo.exportData()
-    if (!data.tournaments?.length) {
-      showToast('没有可导出的赛事', 'error')
-      return
-    }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    a.href = url
-    a.download = `osufinder_tournaments_${dateStr}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    showToast(`已导出 ${data.tournaments?.length} 场赛事`, 'success')
-  } catch (err) {
-    console.error(err)
-    showToast('导出赛事失败', 'error')
   }
 }
 
 async function handleImportTournaments(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files && input.files[0]
-  if (!file) return
   try {
-    const text = await file.text()
-    const data = JSON.parse(text)
-    if (!data || data.app !== 'osufinder' || !Array.isArray(data.tournaments)) {
-      throw new Error('文件格式不正确')
-    }
-    if (!confirm(`即将从文件导入 ${data.tournaments?.length} 场赛事，是否继续？`)) {
-      input.value = ''
-      return
-    }
+    const data = await readJsonFile(event)
+    if (!data) return
+    if (!Array.isArray(data.tournaments)) throw new Error('文件中没有赛事数据')
+    const count = data.tournaments.length
+    const ok = await confirmAction({
+      title: '导入赛事',
+      message: `即将从文件导入 ${count} 场赛事，已有数据会自动合并，是否继续？`,
+      confirmText: '导入'
+    })
+    if (!ok) return
     const result = await tournamentRepo.importData(data)
     await refreshStats()
     showToast(`导入成功：新增 ${result.added} 场，合并 ${result.merged} 场`, 'success')
   } catch (err) {
     console.error(err)
     showToast('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
-  } finally {
-    input.value = ''
+  }
+}
+
+async function handleImportBackup(event: Event) {
+  try {
+    const data = await readJsonFile(event)
+    if (!data) return
+    const hasPlayers = Array.isArray(data.players) && data.players.length > 0
+    const hasTournaments = Array.isArray(data.tournaments) && data.tournaments.length > 0
+    if (!hasPlayers && !hasTournaments) throw new Error('备份文件中没有数据')
+    const ok = await confirmAction({
+      title: '恢复备份',
+      message: `即将恢复 ${hasPlayers ? (data.players as unknown[]).length + ' 位玩家' : ''}${hasPlayers && hasTournaments ? ' 与 ' : ''}${hasTournaments ? (data.tournaments as unknown[]).length + ' 场赛事' : ''}，是否继续？`,
+      confirmText: '恢复'
+    })
+    if (!ok) return
+    const parts: string[] = []
+    if (hasPlayers) {
+      const r = await playersRepo.importData(data)
+      parts.push(`玩家新增 ${r.added} / 合并 ${r.merged}`)
+    }
+    if (hasTournaments) {
+      const r = await tournamentRepo.importData(data)
+      parts.push(`赛事新增 ${r.added} / 合并 ${r.merged}`)
+    }
+    await refreshStats()
+    showToast('恢复完成：' + parts.join('，'), 'success')
+  } catch (err) {
+    console.error(err)
+    showToast('恢复失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
   }
 }
 
@@ -434,19 +506,96 @@ function formatBytes(bytes: number): string {
 </script>
 
 <style scoped>
+.settings-view {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .settings-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 20px;
 }
 
-@media (min-width: 800px) {
+@media (min-width: 900px) {
   .settings-grid {
     grid-template-columns: 1fr 1fr;
   }
   .setting-card:last-child {
     grid-column: 1 / -1;
   }
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-item);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.theme-option:hover {
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}
+
+.theme-option.active {
+  border-color: var(--brand-pink);
+  box-shadow: 0 0 0 3px var(--brand-pink-soft);
+}
+
+.theme-preview {
+  height: 56px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-divider);
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+}
+
+.theme-preview .swatch {
+  display: block;
+  width: 28px;
+  height: 16px;
+  border-radius: 5px;
+  background: var(--gradient-primary);
+}
+
+.theme-preview--light {
+  background: linear-gradient(160deg, #ffffff 0%, #f1f2f9 100%);
+}
+
+.theme-preview--dark {
+  background: linear-gradient(160deg, #1c1d29 0%, #111219 100%);
+}
+
+.theme-preview--system {
+  background: linear-gradient(135deg, #ffffff 0% 50%, #17181f 50% 100%);
+}
+
+.theme-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.theme-option.active .theme-option-label {
+  color: var(--text-primary);
 }
 
 .export-section {
@@ -482,7 +631,7 @@ function formatBytes(bytes: number): string {
   padding: 12px 16px;
   background: var(--bg-item);
   color: var(--text-secondary);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-family: inherit;
   font-weight: 500;
@@ -495,19 +644,7 @@ function formatBytes(bytes: number): string {
 .export-btn:hover {
   border-color: var(--border-focus);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-}
-
-.export-btn--green:hover {
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
-}
-
-.export-btn--yellow:hover {
-  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.2);
-}
-
-.export-btn--red:hover {
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+  box-shadow: var(--shadow-card);
 }
 
 .export-dot {
@@ -520,7 +657,7 @@ function formatBytes(bytes: number): string {
 .export-dot--green { background: var(--color-level-green); }
 .export-dot--yellow { background: var(--color-level-yellow); }
 .export-dot--red { background: var(--color-level-red); }
-.export-dot--all { background: linear-gradient(135deg, var(--color-level-green) 0%, var(--color-level-red) 100%); }
+.export-dot--all { background: var(--gradient-primary); }
 
 .import-options {
   display: flex;
@@ -533,20 +670,12 @@ function formatBytes(bytes: number): string {
   align-items: center;
   justify-content: center;
   padding: 12px 20px;
-  background: linear-gradient(135deg, var(--btn-primary-start) 0%, var(--btn-primary-end) 100%);
-  color: var(--text-on-primary);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-weight: 500;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
   width: auto;
   align-self: flex-start;
-}
-
-.import-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
 }
 
 .file-input {
@@ -558,7 +687,6 @@ function formatBytes(bytes: number): string {
   font-size: var(--font-size-xs);
 }
 
-/* API 配置 */
 .api-config {
   display: flex;
   flex-direction: column;
@@ -568,7 +696,7 @@ function formatBytes(bytes: number): string {
 .field-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .field-label {
@@ -577,23 +705,20 @@ function formatBytes(bytes: number): string {
   color: var(--text-secondary);
 }
 
-.api-actions {
+.api-actions,
+.data-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
-.api-config .input {
-  padding: 10px 12px;
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--bg-item);
-  color: var(--text-primary);
-  font-size: var(--font-size-base);
-  font-family: inherit;
+.hint-line {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
 }
 
-.api-config .input:focus {
-  outline: none;
-  border-color: var(--border-focus);
+.hint-line a {
+  color: var(--brand-pink);
 }
 </style>

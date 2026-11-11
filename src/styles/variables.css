@@ -1,44 +1,66 @@
+/* ====== Design Tokens ====== */
+
 :root {
-  --bg-body-start: #f5f7fa;
-  --bg-body-end: #e4ecfb;
+  /* 品牌色：osu! 粉 + 紫 */
+  --brand-pink: #ff66aa;
+  --brand-pink-soft: rgba(255, 102, 170, 0.18);
+  --brand-purple: #a855f7;
+  --gradient-primary: linear-gradient(135deg, #ff66aa 0%, #a855f7 100%);
+  --gradient-primary-soft: linear-gradient(135deg, rgba(255, 102, 170, 0.14) 0%, rgba(168, 85, 247, 0.14) 100%);
+
+  /* 背景 */
+  --bg-body-start: #fdf4f8;
+  --bg-body-end: #eef0fa;
   --bg-card: #ffffff;
-  --bg-input: #f8fafc;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(24, 16, 38, 0.42);
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-input: #f7f5fb;
   --bg-input-focus: #ffffff;
-  --bg-btn-secondary: #edf2f7;
-  --bg-btn-secondary-hover: #e2e8f0;
-  --bg-btn-danger: #fed7d7;
-  --bg-btn-danger-hover: #fc8181;
-  --bg-item: #f8fafc;
-  --bg-item-hover: #edf2f7;
-  --bg-item-active-start: rgba(102, 126, 234, 0.1);
-  --bg-item-active-end: rgba(118, 75, 162, 0.1);
-  --bg-chip: #edf2f7;
+  --bg-btn-secondary: #f1eef8;
+  --bg-btn-secondary-hover: #e7e2f3;
+  --bg-btn-danger: #ffe4e9;
+  --bg-btn-danger-hover: #ffc2cf;
+  --bg-item: #faf7fc;
+  --bg-item-hover: #f2edf8;
+  --bg-item-active-start: rgba(255, 102, 170, 0.12);
+  --bg-item-active-end: rgba(168, 85, 247, 0.12);
+  --bg-chip: #f4eef9;
 
-  --border-default: #e2e8f0;
-  --border-divider: #edf2f7;
-  --border-focus: #667eea;
-  --border-active: #667eea;
+  /* 边框 */
+  --border-default: #e8e2f0;
+  --border-divider: #f0ebf6;
+  --border-focus: #ff66aa;
+  --border-active: #ff66aa;
 
-  --text-primary: #1a202c;
-  --text-secondary: #2c3e50;
-  --text-muted: #718096;
-  --text-faint: #a0aec0;
+  /* 文字 */
+  --text-primary: #1c1726;
+  --text-secondary: #3d3550;
+  --text-muted: #7c7390;
+  --text-faint: #a9a2b8;
   --text-on-primary: #ffffff;
-  --text-danger: #c53030;
+  --text-danger: #d92d20;
 
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.06);
-  --shadow-focus: 0 0 0 3px rgba(102, 126, 234, 0.1);
-  --shadow-primary-hover: 0 4px 12px rgba(102, 126, 234, 0.3);
-  --shadow-toast: 0 4px 20px rgba(0, 0, 0, 0.15);
+  /* 阴影 */
+  --shadow-card: 0 8px 30px rgba(80, 40, 120, 0.08);
+  --shadow-pop: 0 18px 50px rgba(60, 30, 100, 0.18);
+  --shadow-focus: 0 0 0 3px rgba(255, 102, 170, 0.18);
+  --shadow-primary: 0 8px 22px rgba(255, 102, 170, 0.35);
+  --shadow-primary-hover: 0 10px 28px rgba(255, 102, 170, 0.45);
+  --shadow-toast: 0 12px 36px rgba(20, 10, 40, 0.25);
 
+  /* 圆角 */
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
 
+  /* 等级色 */
   --color-level-green: #22c55e;
   --color-level-yellow: #eab308;
   --color-level-red: #ef4444;
 
+  /* 领奖台 */
   --podium-gold-start: #ffd700;
   --podium-gold-end: #ffb703;
   --podium-gold-text: #8b6914;
@@ -49,12 +71,14 @@
   --podium-bronze-end: #b87333;
   --podium-bronze-text: #fff;
 
-  --btn-primary-start: #667eea;
-  --btn-primary-end: #764ba2;
+  /* 兼容旧变量 */
+  --btn-primary-start: #ff66aa;
+  --btn-primary-end: #a855f7;
   --toast-bg: #2d3748;
   --toast-success: #48bb78;
   --toast-error: #f56565;
 
+  /* 字体 */
   --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-family-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   --font-size-xs: 12px;
@@ -73,44 +97,61 @@
 }
 
 [data-theme='dark'] {
-  --bg-body-start: #0f172a;
-  --bg-body-end: #1e293b;
-  --bg-card: #1e293b;
-  --bg-input: #0f172a;
-  --bg-input-focus: #0f172a;
-  --bg-btn-secondary: #334155;
-  --bg-btn-secondary-hover: #475569;
-  --bg-btn-danger: #7f1d1d;
-  --bg-btn-danger-hover: #991b1b;
-  --bg-item: #334155;
-  --bg-item-hover: #475569;
-  --bg-item-active-start: rgba(129, 140, 248, 0.25);
-  --bg-item-active-end: rgba(168, 85, 247, 0.25);
-  --bg-chip: #475569;
+  --brand-pink: #ff7ab8;
+  --brand-pink-soft: rgba(255, 122, 184, 0.22);
+  --brand-purple: #b07dff;
+  --gradient-primary: linear-gradient(135deg, #ff7ab8 0%, #b07dff 100%);
+  --gradient-primary-soft: linear-gradient(135deg, rgba(255, 122, 184, 0.16) 0%, rgba(176, 125, 255, 0.16) 100%);
 
-  --border-default: #334155;
-  --border-divider: #334155;
-  --border-focus: #818cf8;
-  --border-active: #818cf8;
+  --bg-body-start: #0f0d17;
+  --bg-body-end: #171226;
+  --bg-card: #1a1727;
+  --bg-elevated: #221d33;
+  --bg-overlay: rgba(5, 4, 10, 0.62);
+  --bg-glass: rgba(26, 23, 39, 0.72);
+  --bg-input: #151120;
+  --bg-input-focus: #1c1729;
+  --bg-btn-secondary: #2a2438;
+  --bg-btn-secondary-hover: #352d47;
+  --bg-btn-danger: #3b1720;
+  --bg-btn-danger-hover: #5a1f2c;
+  --bg-item: #211c2f;
+  --bg-item-hover: #2a2439;
+  --bg-item-active-start: rgba(255, 122, 184, 0.2);
+  --bg-item-active-end: rgba(176, 125, 255, 0.2);
+  --bg-chip: #2a2439;
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #e2e8f0;
-  --text-muted: #94a3b8;
-  --text-faint: #64748b;
-  --text-on-primary: #0f172a;
-  --text-danger: #fca5a5;
+  --border-default: #302a42;
+  --border-divider: #262033;
+  --border-focus: #ff8fc2;
+  --border-active: #ff8fc2;
 
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
-  --shadow-focus: 0 0 0 3px rgba(129, 140, 248, 0.25);
-  --shadow-primary-hover: 0 4px 12px rgba(129, 140, 248, 0.4);
-  --shadow-toast: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --text-primary: #f4f1fa;
+  --text-secondary: #ded8ec;
+  --text-muted: #a39bb8;
+  --text-faint: #7a7290;
+  --text-on-primary: #14101c;
+  --text-danger: #ff9aa2;
 
-  --btn-primary-start: #818cf8;
-  --btn-primary-end: #a855f7;
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 20px 56px rgba(0, 0, 0, 0.6);
+  --shadow-focus: 0 0 0 3px rgba(255, 122, 184, 0.24);
+  --shadow-primary: 0 8px 24px rgba(255, 122, 184, 0.3);
+  --shadow-primary-hover: 0 12px 30px rgba(255, 122, 184, 0.4);
+  --shadow-toast: 0 14px 40px rgba(0, 0, 0, 0.6);
+
+  --podium-silver-start: #3a3a46;
+  --podium-silver-end: #2c2c36;
+  --podium-silver-text: #e5e7eb;
+
+  --btn-primary-start: #ff7ab8;
+  --btn-primary-end: #b07dff;
   --toast-bg: #334155;
   --toast-success: #059669;
   --toast-error: #dc2626;
 }
+
+/* ====== Base ====== */
 
 * {
   box-sizing: border-box;
@@ -128,23 +169,40 @@ body {
 body {
   font-family: var(--font-family-base);
   font-size: var(--font-size-base);
-  background: linear-gradient(
-    135deg,
-    var(--bg-body-start) 0%,
-    var(--bg-body-end) 100%
-  );
+  background:
+    radial-gradient(1200px 620px at 8% -12%, rgba(255, 102, 170, 0.18), transparent 62%),
+    radial-gradient(900px 540px at 102% -6%, rgba(139, 92, 246, 0.16), transparent 58%),
+    linear-gradient(160deg, var(--bg-body-start) 0%, var(--bg-body-end) 100%);
+  background-attachment: fixed;
   color: var(--text-secondary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme='dark'] body {
+  background:
+    radial-gradient(1200px 620px at 8% -12%, rgba(255, 122, 184, 0.12), transparent 62%),
+    radial-gradient(900px 540px at 102% -6%, rgba(139, 92, 246, 0.16), transparent 58%),
+    linear-gradient(160deg, var(--bg-body-start) 0%, var(--bg-body-end) 100%);
+  background-attachment: fixed;
 }
 
 #app {
   height: 100vh;
 }
 
+a {
+  color: var(--brand-pink);
+}
+
+::selection {
+  background: var(--brand-pink-soft);
+  color: var(--text-primary);
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -153,9 +211,32 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-faint);
+  background-clip: padding-box;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

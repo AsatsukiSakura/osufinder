@@ -2,18 +2,29 @@
   <div class="detail-view">
     <div v-if="loading" class="empty-state">加载中...</div>
     <div v-else-if="!player" class="empty-state">
-      <div>该玩家不存在或已被删除</div>
-      <router-link to="/players/search" class="btn btn-primary btn-sm" style="margin-top: 16px;">← 返回列表</router-link>
+      <span class="empty-state__icon"><AppIcon name="alert" :size="26" /></span>
+      <span class="empty-state__title">该玩家不存在或已被删除</span>
+      <router-link to="/players/search" class="btn btn-primary btn-sm">
+        <AppIcon name="arrow-left" :size="15" />
+        <span>返回列表</span>
+      </router-link>
     </div>
 
     <div v-else>
       <div class="detail-header">
-        <router-link to="/players/search" class="link-back">← 返回列表</router-link>
+        <router-link to="/players/search" class="link-back">
+          <AppIcon name="arrow-left" :size="15" />
+          <span>返回列表</span>
+        </router-link>
         <div class="detail-actions">
           <button v-if="!isEditing" class="btn btn-secondary btn-sm" @click="refreshOsuData" :disabled="refreshingOsu">
-            {{ refreshingOsu ? '刷新中...' : '🔄 osu!' }}
+            <AppIcon name="refresh" :size="15" />
+            <span>{{ refreshingOsu ? '刷新中...' : 'osu!' }}</span>
           </button>
-          <button v-if="!isEditing" class="btn btn-primary btn-sm" @click="startEdit">✏️ 编辑</button>
+          <button v-if="!isEditing" class="btn btn-primary btn-sm" @click="startEdit">
+            <AppIcon name="edit" :size="15" />
+            <span>编辑</span>
+          </button>
           <button v-if="isEditing" class="btn btn-secondary btn-sm" @click="cancelEdit">取消</button>
         </div>
       </div>
@@ -115,10 +126,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { playersRepo, tournamentRepo } from '../db'
 import PlayerEditor from '../components/PlayerEditor.vue'
+import AppIcon from '../components/AppIcon.vue'
+import { showToast } from '../composables/useToast'
 import { getLevelLabel } from '../utils/level'
 import { hasAnyContact } from '../utils/player'
 import { fetchOsuUser } from '../api/osu'
@@ -176,7 +189,7 @@ async function refreshOsuData() {
   try {
     const user = await fetchOsuUser(p.osuUid)
     if (!user || !user.username) {
-      alert('未能在 osu! 找到该玩家')
+      showToast('未能在 osu! 找到该玩家', 'error')
       return
     }
     // 如果 osu! 用户名不在当前昵称列表中，则添加
@@ -190,12 +203,12 @@ async function refreshOsuData() {
         records: p.records
       })
       player.value = { ...p, nicknames: [...nicks] }
-      alert(`已添加 osu! 用户名: ${user.username}`)
+      showToast(`已添加 osu! 用户名：${user.username}`, 'success')
     } else {
-      alert(`osu! 用户名 "${user.username}" 已在称呼列表中`)
+      showToast(`osu! 用户名「${user.username}」已在称呼列表中`, 'info')
     }
   } catch (err) {
-    alert('刷新失败: ' + (err instanceof Error ? err.message : '请检查 API 凭证配置'))
+    showToast('刷新失败：' + (err instanceof Error ? err.message : '请检查 API 凭证配置'), 'error')
   } finally {
     refreshingOsu.value = false
   }
@@ -211,6 +224,14 @@ function onDeleted() {
 }
 
 onMounted(() => { loadPlayer() })
+
+watch(
+  () => route.params.osuUid,
+  () => {
+    isEditing.value = false
+    loadPlayer()
+  }
+)
 
 async function loadPlayer() {
   loading.value = true
@@ -236,7 +257,13 @@ async function loadPlayer() {
 .detail-view {
   display: flex;
   flex-direction: column;
-  gap: var(--radius-lg);
+  gap: 18px;
+}
+
+.link-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .detail-actions {
@@ -244,15 +271,34 @@ async function loadPlayer() {
   gap: 8px;
 }
 
+.detail-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ---- 卡片主体 ---- */
 .profile-card {
+  position: relative;
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-divider);
+  border-radius: var(--radius-xl);
   padding: 28px;
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: var(--font-size-2xl);
+  animation: rise-in 0.32s ease both;
+}
+
+.profile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--gradient-primary);
+  opacity: 0.85;
 }
 
 /* ---- 头像 + 名称区 ---- */
@@ -264,14 +310,13 @@ async function loadPlayer() {
 
 .profile-avatar-wrap {
   position: relative;
-  width: 120px;
-  height: 120px;
+  width: 116px;
+  height: 116px;
   flex-shrink: 0;
   border-radius: 50%;
   overflow: hidden;
   background: var(--bg-item);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  border: 3px solid var(--border-default);
+  box-shadow: 0 10px 30px rgba(255, 102, 170, 0.28), 0 0 0 3px var(--bg-card), 0 0 0 4px var(--brand-pink);
 }
 
 .profile-avatar {

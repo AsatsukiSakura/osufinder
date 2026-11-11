@@ -16,21 +16,21 @@
         </div>
       </div>
     </form>
-
-    <div v-if="toast" class="toast" :class="toast.type">{{ toast.text }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { ToastMessage } from '../composables/useToast'
-
-defineProps<{
+withDefaults(defineProps<{
   isEdit?: boolean
   editLabel?: string
   addLabel?: string
   lastUpdated?: string
-  toast?: ToastMessage | null
-}>()
+}>(), {
+  isEdit: false,
+  editLabel: '编辑',
+  addLabel: '新建',
+  lastUpdated: ''
+})
 
 defineEmits<{
   (e: 'save'): void

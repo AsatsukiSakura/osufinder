@@ -1,20 +1,27 @@
-import { ref, type Ref } from 'vue'
+import { ref } from 'vue'
 
-export interface ToastMessage {
+export type ToastType = 'success' | 'error' | 'info'
+
+export interface ToastItem {
+  id: number
   text: string
-  type: 'success' | 'error'
+  type: ToastType
 }
 
-export function useToast(timeout = 2000) {
-  const toast: Ref<ToastMessage | null> = ref(null)
+// 全局 toast 队列：任何位置调用 showToast 都会显示在 ToastHost 中
+const toasts = ref<ToastItem[]>([])
+let seed = 0
 
-  let timerId: ReturnType<typeof setTimeout> | null = null
+export function showToast(text: string, type: ToastType = 'success', duration = 2600) {
+  const id = ++seed
+  toasts.value = [...toasts.value, { id, text, type }]
+  setTimeout(() => dismissToast(id), duration)
+}
 
-  function showToast(text: string, type: 'success' | 'error' = 'success') {
-    if (timerId) clearTimeout(timerId)
-    toast.value = { text, type }
-    timerId = setTimeout(() => { toast.value = null }, timeout)
-  }
+export function dismissToast(id: number) {
+  toasts.value = toasts.value.filter((t) => t.id !== id)
+}
 
-  return { toast, showToast }
+export function useToast() {
+  return { toasts, showToast, dismissToast }
 }

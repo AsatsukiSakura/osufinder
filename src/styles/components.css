@@ -8,19 +8,31 @@
 }
 
 .link-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--text-muted);
   text-decoration: none;
   font-size: var(--font-size-base);
-  transition: color 0.15s;
+  transition: color 0.15s, transform 0.15s;
 }
 
 .link-back:hover {
-  color: var(--text-primary);
+  color: var(--brand-pink);
+  transform: translateX(-2px);
 }
 
 /* ====== Base Classes ====== */
 
-.card,
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+}
+
 .editor-wrap {
   background: var(--bg-card);
   border-radius: var(--radius-lg);
@@ -30,6 +42,12 @@
   flex-direction: column;
   max-height: calc(100vh - 140px);
   overflow: hidden;
+}
+
+.app-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .card--bordered {
@@ -279,6 +297,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   text-decoration: none;
   flex-shrink: 0;
 }
@@ -313,6 +332,34 @@
 .btn-danger:hover {
   background: var(--bg-btn-danger-hover);
   color: var(--text-on-primary);
+}
+
+.btn-danger-solid {
+  background: linear-gradient(135deg, #f04e4e 0%, #d92d20 100%);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(217, 45, 32, 0.32);
+}
+
+.btn-danger-solid:hover {
+  box-shadow: 0 10px 24px rgba(217, 45, 32, 0.4);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.btn-outline:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  background: var(--bg-item);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .btn-sm {
@@ -504,36 +551,6 @@
 .new-record-actions {
   display: flex;
   gap: 6px;
-}
-
-/* ====== Toast ====== */
-
-.toast {
-  position: fixed;
-  bottom: 30px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--toast-bg);
-  color: var(--text-on-primary);
-  padding: 12px 24px;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  box-shadow: var(--shadow-toast);
-  z-index: 1000;
-  animation: slide-up 0.25s ease;
-}
-
-.toast.success {
-  background: var(--toast-success);
-}
-
-.toast.error {
-  background: var(--toast-error);
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translate(-50%, 20px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
 /* ====== Tournament Editor ====== */

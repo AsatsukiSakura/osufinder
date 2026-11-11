@@ -1,5 +1,4 @@
 import { ref } from 'vue'
-import { useToast } from './useToast'
 import { formatDateTime } from '../utils/format'
 import type { Player, Tournament } from '../types'
 
@@ -15,10 +14,5 @@ export function useEditor(entityRef: Player | Tournament | null | undefined) {
     }
   }
 
-  return {
-    isEdit,
-    lastUpdated,
-    refreshLastUpdated,
-    ...useToast()
-  }
+  return { isEdit, lastUpdated, refreshLastUpdated }
 }

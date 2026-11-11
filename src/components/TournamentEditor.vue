@@ -4,7 +4,6 @@
     edit-label="编辑赛事"
     add-label="添加赛事"
     :last-updated="lastUpdated"
-    :toast="toast"
     @save="handleSave"
     @delete="() => remove(props.tournament?.id)"
   >
@@ -116,6 +115,7 @@ import { computed, reactive, ref, onMounted, onBeforeUnmount } from 'vue'
 import { tournamentRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
 import { useEntityCrud } from '../composables/useEntityCrud'
+import { showToast } from '../composables/useToast'
 import { usePlayerNames } from '../composables/usePlayerNames'
 import EditorShell from './EditorShell.vue'
 import TeamEditor from './TeamEditor.vue'
@@ -135,11 +135,11 @@ const emit = defineEmits<{
   (e: 'deleted'): void
 }>()
 
-const { isEdit, lastUpdated, refreshLastUpdated, toast, showToast } = useEditor(props.tournament)
+const { isEdit, lastUpdated, refreshLastUpdated } = useEditor(props.tournament)
 const { loadPlayerNames } = usePlayerNames()
 
 const { save, remove } = useEntityCrud(tournamentRepo, {
-  isEdit, showToast, emit, label: '这场赛事', refreshLastUpdated
+  isEdit, emit, label: '这场赛事', refreshLastUpdated
 })
 
 // 名次集合 → 下拉选项
@@ -199,7 +199,7 @@ const form = reactive<{
   ms: props.tournament?.ms || 0,
   rankSet: initialRankSet,
   teams: (props.tournament?.teams || []).map(t => ({
-    _id: 't' + (teamIdCounter++),
+    _id: t._id || 't' + (teamIdCounter++),
     name: t.name || '',
     members: ((t.members || []) as (number | { osuUid: number })[]).map(m =>
       typeof m === 'object' ? Number(m.osuUid) : Number(m)
@@ -239,13 +239,27 @@ function buildData() {
     ts: form.ts || 0,
     ms: form.ms || 0,
     rankSet: form.rankSet.map(s => ({ l: s.l, r: s.r })),
-    teams: form.teams.map(t => ({ name: t.name, members: [...t.members], rank: t.rank }))
+    teams: form.teams.map(t => ({
+      _id: t._id,
+      name: t.name.trim(),
+      members: [...t.members],
+      rank: t.rank
+    }))
   }
 }
 
 async function handleSave() {
   if (!form.name.trim()) return showToast('请填写赛事名称', 'error')
   if (form.ts > 0 && form.ms > form.ts) return showToast('ms 不能 > ts', 'error')
+
+  // 队伍校验：名称非空且不重复
+  const teamNames = new Set<string>()
+  for (const team of form.teams) {
+    const name = team.name.trim()
+    if (!name) return showToast('存在未命名的队伍，请补全或删除', 'error')
+    if (teamNames.has(name)) return showToast(`队伍名称「${name}」重复`, 'error')
+    teamNames.add(name)
+  }
 
   // 检查名次集合是否有效
   const sorted = [...form.rankSet].sort((a, b) => a.l - b.l)

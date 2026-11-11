@@ -1,4 +1,6 @@
 import type { Ref } from 'vue'
+import { showToast } from './useToast'
+import { confirmAction } from './useDialog'
 
 export interface CrudRepo {
   create(data: Record<string, unknown>): Promise<unknown>
@@ -8,7 +10,6 @@ export interface CrudRepo {
 
 export interface CrudContext {
   isEdit: Ref<boolean>
-  showToast: (text: string, type: 'success' | 'error') => void
   emit(event: string, ...args: unknown[]): void
   label: string
   refreshLastUpdated?: (entity?: { updatedAt?: number } | null) => void
@@ -22,7 +23,7 @@ export interface SaveOptions {
   onError?: (err: unknown) => void
 }
 
-export function useEntityCrud(repo: CrudRepo, { isEdit, showToast, emit, label, refreshLastUpdated }: CrudContext) {
+export function useEntityCrud(repo: CrudRepo, { isEdit, emit, label, refreshLastUpdated }: CrudContext) {
   async function save({ buildData, validate, beforeCreate, id, onError }: SaveOptions) {
     const errMsg = validate?.()
     if (errMsg) {
@@ -59,7 +60,13 @@ export function useEntityCrud(repo: CrudRepo, { isEdit, showToast, emit, label, 
 
   async function remove(id: number | string | null | undefined) {
     if (!id || !isEdit.value) return
-    if (!confirm(`确定要删除${label}吗？`)) return
+    const ok = await confirmAction({
+      title: `删除${label}`,
+      message: `确定要删除${label}吗？此操作不可撤销。`,
+      confirmText: '删除',
+      danger: true
+    })
+    if (!ok) return
     try {
       await repo.remove(id)
       emit('deleted')

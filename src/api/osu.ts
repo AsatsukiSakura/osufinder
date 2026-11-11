@@ -5,15 +5,33 @@ import type { OsuUser } from '../types'
 // 生产环境部署时需要配置自己的反向代理
 const TOKEN_URL = '/api/osu-token'
 const API_BASE = '/api/osu-v2'
+const REQUEST_TIMEOUT = 12000
 
 let cachedToken: string | null = null
 let tokenExpiresAt = 0
 
+/** 带超时的 fetch，避免网络异常时界面一直转圈 */
+async function fetchWithTimeout(input: string, init: RequestInit = {}, timeout = REQUEST_TIMEOUT): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') {
+      throw new Error('请求超时，请检查网络或代理设置')
+    }
+    throw new Error('网络请求失败，请检查网络或代理设置')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * 获取 access token（自动缓存 + 自动刷新）
+ * @param force 强制重新获取（token 失效时使用）
  */
-async function getToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiresAt - 60000) {
+async function getToken(force = false): Promise<string> {
+  if (!force && cachedToken && Date.now() < tokenExpiresAt - 60000) {
     return cachedToken!
   }
 
@@ -29,13 +47,16 @@ async function getToken(): Promise<string> {
     scope: 'public'
   })
 
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString()
   })
 
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('API 凭证无效，请在设置中重新配置')
+    }
     throw new Error(`获取 osu! token 失败 (${res.status})`)
   }
 
@@ -45,16 +66,27 @@ async function getToken(): Promise<string> {
   return cachedToken!
 }
 
+/** 清空内存中的 token 缓存（凭证变更时调用） */
+export function clearTokenCache() {
+  cachedToken = null
+  tokenExpiresAt = 0
+}
+
 /**
- * 调用 osu! API v2
+ * 调用 osu! API v2，401 时自动刷新 token 重试一次
  */
-async function apiCall<T = unknown>(path: string): Promise<T | null> {
-  const token = await getToken()
-  const res = await fetch(`${API_BASE}${path}`, {
+async function apiCall<T = unknown>(path: string, retried = false): Promise<T | null> {
+  const token = await getToken(retried)
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` }
   })
+  if (res.status === 401 && !retried) {
+    clearTokenCache()
+    return apiCall<T>(path, true)
+  }
   if (!res.ok) {
     if (res.status === 404) return null
+    if (res.status === 429) throw new Error('osu! API 请求过于频繁，请稍后再试')
     throw new Error(`osu! API 请求失败 (${res.status})`)
   }
   return res.json() as Promise<T>
@@ -84,10 +116,14 @@ export async function verifyCredentials(clientId: string, clientSecret: string):
     grant_type: 'client_credentials',
     scope: 'public'
   })
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetchWithTimeout(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString()
   })
+  if (res.ok) {
+    // 新凭证可用，作废旧缓存
+    clearTokenCache()
+  }
   return res.ok
 }

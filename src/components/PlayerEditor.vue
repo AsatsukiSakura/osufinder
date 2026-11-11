@@ -4,7 +4,6 @@
     edit-label="编辑玩家"
     add-label="添加玩家"
     :last-updated="lastUpdated"
-    :toast="toast"
     @save="handleSave"
     @delete="() => remove(form.osuUid)"
   >
@@ -121,6 +120,7 @@ import { reactive, ref } from 'vue'
 import { playersRepo } from '../db'
 import { useEditor } from '../composables/useEditor'
 import { useEntityCrud } from '../composables/useEntityCrud'
+import { showToast } from '../composables/useToast'
 import { fetchOsuUser, fetchOsuUserByName } from '../api/osu'
 import EditorShell from './EditorShell.vue'
 import TagField from './TagField.vue'
@@ -133,10 +133,10 @@ const emit = defineEmits<{
   (e: 'deleted'): void
 }>()
 
-const { isEdit, lastUpdated, toast, showToast } = useEditor(props.player)
+const { isEdit, lastUpdated } = useEditor(props.player)
 
 const { save, remove } = useEntityCrud(playersRepo, {
-  isEdit, showToast, emit, label: '这位玩家'
+  isEdit, emit, label: '这位玩家'
 })
 
 // 表单数据

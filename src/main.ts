@@ -5,6 +5,9 @@ import './styles/components.css'
 import './styles/cards.css'
 import App from './App.vue'
 import router from './router'
+import { initTheme } from './composables/useTheme'
+
+initTheme()
 
 const app = createApp(App)
 app.use(router)

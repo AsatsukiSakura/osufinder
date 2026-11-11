@@ -3,19 +3,44 @@
     <div v-if="viewState === 'loading'" class="empty-state">加载中...</div>
 
     <div v-else-if="viewState === 'notfound'" class="empty-state">
-      <div>该赛事不存在或已被删除</div>
-      <router-link to="/tournaments/search" class="btn btn-primary btn-sm" style="margin-top: 16px;">← 返回列表</router-link>
+      <span class="empty-state__icon"><AppIcon name="alert" :size="26" /></span>
+      <span class="empty-state__title">该赛事不存在或已被删除</span>
+      <router-link to="/tournaments/search" class="btn btn-primary btn-sm">
+        <AppIcon name="arrow-left" :size="15" />
+        <span>返回列表</span>
+      </router-link>
     </div>
     <template v-else-if="viewState === 'viewing'">
       <div class="detail-header">
-        <router-link to="/tournaments/search" class="link-back">← 返回列表</router-link>
-        <button class="btn btn-primary btn-sm" @click="startEdit">✏️ 编辑</button>
+        <router-link to="/tournaments/search" class="link-back">
+          <AppIcon name="arrow-left" :size="15" />
+          <span>返回列表</span>
+        </router-link>
+        <button class="btn btn-primary btn-sm" @click="startEdit">
+          <AppIcon name="edit" :size="15" />
+          <span>编辑</span>
+        </button>
       </div>
 
       <div class="tournament-card-detail">
         <div class="tournament-head">
-          <h2 class="tournament-name">{{ tournament?.name }}</h2>
-          <span v-if="tournament?.edition" class="tournament-edition">{{ tournament?.edition }}</span>
+          <div class="head-main">
+            <h2 class="tournament-name">{{ tournament?.name }}</h2>
+            <span v-if="tournament?.edition" class="tournament-edition">{{ tournament?.edition }}</span>
+          </div>
+          <div class="tournament-meta">
+            <span v-if="tournament?.ts || tournament?.ms" class="meta-chip">
+              {{ tournament?.ts }}v{{ tournament?.ms }} 赛制
+            </span>
+            <span class="meta-chip">{{ tournament?.teams?.length || 0 }} 支队伍</span>
+          </div>
+        </div>
+
+        <div v-if="tournament?.rankSet?.length" class="rank-set">
+          <span class="rank-set-label">名次区间</span>
+          <span v-for="(item, i) in tournament.rankSet" :key="i" class="rank-set-chip">
+            {{ formatRankRange(item) }}
+          </span>
         </div>
 
         <div v-if="tournament?.teams?.length" class="teams-display">
@@ -49,7 +74,10 @@
 
     <template v-else-if="viewState === 'editing'">
       <div class="detail-header">
-        <router-link to="/tournaments/search" class="link-back">← 返回列表</router-link>
+        <router-link to="/tournaments/search" class="link-back">
+          <AppIcon name="arrow-left" :size="15" />
+          <span>返回列表</span>
+        </router-link>
         <button class="btn btn-secondary btn-sm" @click="cancelEdit">取消</button>
       </div>
 
@@ -63,12 +91,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { tournamentRepo } from '../db'
 import TournamentEditor from '../components/TournamentEditor.vue'
+import AppIcon from '../components/AppIcon.vue'
 import { usePlayerNames } from '../composables/usePlayerNames'
-import type { Tournament } from '../types'
+import type { Tournament, RankSetItem } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,6 +123,10 @@ const sortedTeams = computed(() => {
     }
   }).sort((a, b) => a._sortKey - b._sortKey)
 })
+
+function formatRankRange(item: RankSetItem): string {
+  return item.l === item.r ? `#${item.l}` : `#${item.l}~#${item.r}`
+}
 
 function podiumCardClass(rank: string): string {
   if (rank === '#1') return 'team-detail-card--gold'
@@ -152,39 +185,128 @@ function onDeleted() {
 onMounted(() => {
   loadTournament()
 })
+
+watch(
+  () => route.params.id,
+  () => {
+    isEditing.value = false
+    loadTournament()
+  }
+)
 </script>
 
 <style scoped>
+.detail-view {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.detail-header {
+  margin-bottom: 0;
+}
+
 .tournament-card-detail {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-divider);
   padding: 28px;
   box-shadow: var(--shadow-card);
+  animation: rise-in 0.35s ease both;
+}
+
+.tournament-card-detail::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--gradient-primary);
 }
 
 .tournament-head {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
   padding-bottom: 18px;
   border-bottom: 1px solid var(--border-divider);
+}
+
+.head-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .tournament-name {
   font-size: var(--font-size-3xl);
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0;
 }
 
 .tournament-edition {
-  font-size: var(--font-size-base);
-  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--brand-pink);
   padding: 4px 12px;
+  background: var(--brand-pink-soft);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.tournament-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
   background: var(--bg-item);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-divider);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.rank-set {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-divider);
+  margin-bottom: 18px;
+}
+
+.rank-set-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.rank-set-chip {
+  padding: 3px 12px;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  color: var(--brand-purple);
+  background: color-mix(in srgb, var(--brand-purple) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-purple) 28%, transparent);
+  border-radius: 999px;
 }
 
 .teams-display {
@@ -213,8 +335,15 @@ onMounted(() => {
   padding: 14px 16px;
   background: var(--bg-item);
   border-radius: var(--radius-md);
+  border: 1px solid var(--border-divider);
   border-left: 4px solid var(--border-default);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.team-detail-card:hover {
+  background: var(--bg-card);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-card);
 }
 
 .team-detail-card--gold { border-left-color: var(--podium-gold-start); }
